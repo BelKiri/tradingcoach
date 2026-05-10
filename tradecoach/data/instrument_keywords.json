@@ -1,0 +1,37 @@
+{
+  "instruments": {
+    "XAUUSD": ["gold", "xauusd", "precious metal", "bullion", "safe haven gold", "gold price"],
+    "XAGUSD": ["silver", "xagusd", "precious metal silver"],
+    "USOIL": ["oil", "crude", "wti", "brent", "opec", "petroleum", "oil price"],
+    "BTCUSD": ["bitcoin", "btc", "crypto", "cryptocurrency"],
+    "XRPUSD": ["xrp", "ripple"],
+    "EURUSD": ["euro", "eur", "ecb", "eurozone", "european central bank"],
+    "GBPUSD": ["pound", "gbp", "sterling", "boe", "bank of england"],
+    "USDJPY": ["yen", "jpy", "boj", "bank of japan", "japanese"],
+    "USDCAD": ["canadian dollar", "cad", "boc", "bank of canada", "loonie"],
+    "AUDUSD": ["australian dollar", "aud", "rba", "aussie"],
+    "NZDUSD": ["new zealand dollar", "nzd", "rbnz", "kiwi"],
+    "USDCHF": ["swiss franc", "chf", "snb", "swiss national bank"],
+    "US500": ["s&p", "sp500", "wall street", "us stocks", "us equities", "s&p 500"],
+    "US100": ["nasdaq", "tech stocks", "us100"],
+    "GER40": ["dax", "german stocks", "ger40"]
+  },
+  "cross_asset": {
+    "USD_DATA": {
+      "keywords": ["nfp", "non-farm", "payrolls", "us jobs", "us employment", "fed", "fomc", "federal reserve", "us cpi", "us inflation", "us gdp", "us retail sales", "us pmi"],
+      "affects": ["EURUSD", "GBPUSD", "USDJPY", "USDCAD", "AUDUSD", "XAUUSD", "US500"]
+    },
+    "GEOPOLITICS": {
+      "keywords": ["war", "attack", "missile", "military", "invasion", "sanctions", "conflict", "troops", "nuclear", "iran", "israel", "russia", "ukraine", "china taiwan"],
+      "affects": ["XAUUSD", "USOIL", "US500", "USDJPY"]
+    },
+    "RISK_SENTIMENT": {
+      "keywords": ["recession", "crisis", "crash", "default", "banking crisis", "contagion", "panic"],
+      "affects": ["XAUUSD", "US500", "USDJPY", "BTCUSD"]
+    },
+    "CRYPTO_BROAD": {
+      "keywords": ["crypto regulation", "sec crypto", "etf approval", "etf bitcoin", "crypto ban", "stablecoin"],
+      "affects": ["BTCUSD", "XRPUSD"]
+    }
+  }
+}

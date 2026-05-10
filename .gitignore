@@ -1,0 +1,75 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Chroma vector DB
+chroma_data/
+
+# Uploaded CSV files
+uploads/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# pytest
+.pytest_cache/
+htmlcov/
+.coverage
+
+# mypy
+.mypy_cache/
+
+# MCP config with secrets
+.mcp.json
+.mcp.local.json
+.mcp.*.json
+!.mcp.json.example
+
+# Personal data
+*.xlsx
+*.xls
+
+# Next.js
+.next/
+out/
+node_modules/
+
+# Audit reports
+audit_report*.txt
+
+# Keys & certs
+*.pem
+*.key
+secrets/
+credentials/
+
+# Runtime cache
+tradecoach/data/news_cache.json
+tradecoach/data/price_cache/
