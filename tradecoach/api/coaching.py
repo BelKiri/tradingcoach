@@ -5,6 +5,7 @@ AI coaching endpoint — full RAG-powered coaching analysis.
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -16,6 +17,7 @@ from tradecoach.services.coaching import get_ai_coaching
 from tradecoach.services.llm import LLMError
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -123,9 +125,10 @@ async def request_coaching(user_id: str, body: CoachingRequest, auth_user: str =
         )
     except LLMError as e:
         from fastapi.responses import JSONResponse
+        logger.exception("LLMError while generating coaching for user_id=%s", user_id)
         return JSONResponse(
             status_code=400,
-            content={"error": str(e)},
+            content={"error": "Unable to generate coaching at this time."},
         )
 
     return CoachingResponse(**result)
