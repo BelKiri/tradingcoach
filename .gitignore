@@ -73,3 +73,8 @@ credentials/
 # Runtime cache
 tradecoach/data/news_cache.json
 tradecoach/data/price_cache/
+
+# Env files — all variations (anon, prod, local, etc)
+.env*
+!.env.example
+!.env.*.example
