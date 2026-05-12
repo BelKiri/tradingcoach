@@ -22,6 +22,7 @@ from tradecoach.services.coaching import (
     _build_calendar_section,
     _build_context,
     _build_metrics_snapshot,
+    _build_repeat_prompt,
     _build_statistics_section,
     _build_trade_log,
     _parse_main_problem,
@@ -285,6 +286,29 @@ class TestBuildFullCoachingPrompt:
         assert "VERDICT" in prompt
         assert "RULE CHECK" in prompt
         assert "PROGRESS SCORE" in prompt
+
+    def test_build_repeat_prompt_handles_json_string_metrics(self):
+        metrics_json = (
+            '{"trades_count": 81, "win_rate": 33.33, "total_pnl": -963.8, '
+            '"profit_factor": 0.88, "revenge_count": 21, "revenge_cost": 3259.73, '
+            '"martingale_count": 5, "quick_exits_count": 9}'
+        )
+        recommendations_json = (
+            '["Max 3 trades per day", "No revenge trades", "Skip EURUSD"]'
+        )
+        prev = {
+            "created_at": "2026-04-26T04:28:27+00:00",
+            "main_problem": "Overtrading on calm days",
+            "recommendations": recommendations_json,
+            "metrics_snapshot": metrics_json,
+        }
+
+        prompt = _build_repeat_prompt(prev)
+
+        assert isinstance(prompt, str)
+        assert "PREVIOUS SESSION" in prompt
+        assert "win_rate: 33.33" in prompt
+        assert "Max 3 trades per day" in prompt
 
     def test_no_trades_raises(self):
         with pytest.raises(LLMError, match="No trades"):

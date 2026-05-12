@@ -4,7 +4,6 @@ AI coaching endpoint — full RAG-powered coaching analysis.
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
@@ -15,6 +14,7 @@ from tradecoach.api.auth import get_current_user, require_self
 from tradecoach.db.queries import get_client
 from tradecoach.services.coaching import get_ai_coaching
 from tradecoach.services.llm import LLMError
+from tradecoach.utils.json_helpers import parse_json_field
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -72,18 +72,6 @@ class CoachingErrorResponse(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _parse_json_field(val: Any) -> Any:
-    """Parse a JSON string field from DB, or return as-is if already parsed."""
-    if val is None:
-        return None
-    if isinstance(val, str):
-        try:
-            return json.loads(val)
-        except (json.JSONDecodeError, TypeError):
-            return val
-    return val
-
-
 def _session_to_dict(row: dict) -> dict:
     """Convert a DB row to a clean session dict."""
     return {
@@ -92,8 +80,8 @@ def _session_to_dict(row: dict) -> dict:
         "account_id": row["account_id"],
         "created_at": row.get("created_at", ""),
         "ai_response": row.get("ai_response", ""),
-        "metrics_snapshot": _parse_json_field(row.get("metrics_snapshot")),
-        "recommendations": _parse_json_field(row.get("recommendations")),
+        "metrics_snapshot": parse_json_field(row.get("metrics_snapshot")),
+        "recommendations": parse_json_field(row.get("recommendations")),
         "verdict": row.get("verdict"),
         "main_problem": row.get("main_problem"),
         "new_trades_count": row.get("new_trades_count"),

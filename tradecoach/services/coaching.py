@@ -13,6 +13,7 @@ from typing import Any
 
 from tradecoach.services import trade_analyzer as ta
 from tradecoach.services._helpers import _net_profit, _to_dt
+from tradecoach.utils.json_helpers import parse_json_field
 from tradecoach.services.calendar import (
     calculate_news_impact,
     load_calendar,
@@ -423,8 +424,8 @@ def _build_repeat_prompt(prev: dict) -> str:
     """Build repeat analysis prompt with previous session comparison."""
     created = prev.get("created_at", "unknown date")
     main_problem = prev.get("main_problem", "not recorded")
-    recommendations = prev.get("recommendations", [])
-    metrics = prev.get("metrics_snapshot", {})
+    recommendations = parse_json_field(prev.get("recommendations")) or []
+    metrics = parse_json_field(prev.get("metrics_snapshot")) or {}
 
     rec_text = ""
     if recommendations:
