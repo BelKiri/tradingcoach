@@ -46,7 +46,7 @@ class LLMUsage:
 # Cost per 1M tokens (input / output) — March 2026 pricing
 _PRICING: dict[str, tuple[float, float]] = {
     "gpt-4o-mini": (0.15, 0.60),
-    "claude-sonnet-4-20250514": (3.00, 15.00),
+    "claude-sonnet-4-6": (3.00, 15.00),
 }
 
 
@@ -172,7 +172,7 @@ async def deep_analysis(prompt: str, context: str = "") -> tuple[str, LLMUsage]:
     if not settings.anthropic_api_key:
         raise LLMError("Anthropic API key not configured")
 
-    model = "claude-sonnet-4-20250514"
+    model = "claude-sonnet-4-6"
     messages = []
     if context:
         messages.append({"role": "user", "content": f"Context data:\n{context}"})

@@ -79,7 +79,7 @@ class TestCalcCost:
         assert cost == pytest.approx(0.75)  # 0.15 + 0.60
 
     def test_claude_sonnet_cost(self):
-        cost = _calc_cost("claude-sonnet-4-20250514", 1_000_000, 1_000_000)
+        cost = _calc_cost("claude-sonnet-4-6", 1_000_000, 1_000_000)
         assert cost == pytest.approx(18.0)  # 3.0 + 15.0
 
     def test_unknown_model_zero_cost(self):
@@ -211,7 +211,7 @@ class TestDeepAnalysis:
             text, usage = await deep_analysis("Analyze my trading")
 
         assert text == "Deep analysis here"
-        assert usage.model == "claude-sonnet-4-20250514"
+        assert usage.model == "claude-sonnet-4-6"
         assert usage.input_tokens == 200
         assert usage.output_tokens == 100
 
