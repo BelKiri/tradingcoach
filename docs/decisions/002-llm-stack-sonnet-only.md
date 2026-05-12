@@ -1,6 +1,6 @@
 # ADR 002: LLM stack — single-model Claude Sonnet 4.6
 
-Status: Proposed
+Status: Partially Implemented
 
 Date: 2026-05-11
 
@@ -108,6 +108,13 @@ pre-screening, batch classification at scale beyond what Python can
 handle), add Haiku 4.5 (or whatever is current at the time) in a new
 
 ADR. YAGNI for now.
+
+## Implementation status (2026-05-12)
+
+Partially implemented in production hotfix.
+
+- Done: model migrated to current Sonnet 4.6
+- Pending: removal of dual-vendor router code and OpenAI dependency
 
 ## Consequences
 
