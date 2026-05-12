@@ -1,0 +1,31 @@
+# Changelog
+
+All notable changes to TradingCoach.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Planned
+- Cleanup of legacy LLM integration code
+- Auth flow idempotency improvement
+- HTTPS for backend endpoint
+
+## [0.1.0] — 2026-05-12
+
+### Added
+- Backend API (FastAPI) deployed to production
+- Frontend (Next.js) connected to production backend
+- AI coaching insights powered by Claude Sonnet 4.6
+- Trade upload (MT4 CSV, Excel) and behavioral analysis
+- Economic calendar matching
+- News collection (background loop)
+- User authentication via Supabase Auth + Google OAuth
+- Dashboard with equity curve, win rate, profit factor
+
+### Architecture
+- Backend hosted on Hetzner VPS, deployed via Docker Compose
+- nginx reverse proxy for backend
+- Frontend hosted on Vercel
+- Supabase (Postgres + Auth) as data backend
