@@ -32,7 +32,7 @@ export function MarketingFooter() {
       <div className="mx-auto max-w-6xl px-4 py-12">
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <span className="text-lg font-bold">TradeCoach</span>
+            <span className="text-lg font-bold">TradingCoach</span>
             <p className="mt-2 text-sm text-muted-foreground">
               AI trading coach that fixes your habits, not your strategy.
             </p>
@@ -58,9 +58,9 @@ export function MarketingFooter() {
         <div className="mt-12 border-t pt-6 text-center text-xs text-muted-foreground">
           <p>
             Trading involves risk. Past performance does not guarantee future
-            results. TradeCoach provides analysis, not financial advice.
+            results. TradingCoach provides analysis, not financial advice.
           </p>
-          <p className="mt-2">&copy; 2026 TradeCoach. All rights reserved.</p>
+          <p className="mt-2">&copy; 2026 TradingCoach. All rights reserved.</p>
         </div>
       </div>
     </footer>

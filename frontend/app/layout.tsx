@@ -5,7 +5,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: "TradeCoach — AI Trading Coach",
+  title: "TradingCoach — AI Trading Coach",
   description:
     "Upload your trades. See exactly why you're losing. Get a personal fix plan powered by AI.",
 };

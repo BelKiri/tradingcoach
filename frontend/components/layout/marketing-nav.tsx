@@ -89,7 +89,7 @@ export function MarketingNav() {
       <div className="mx-auto flex h-16 max-w-6xl items-center px-4">
         {/* Left: Logo */}
         <Link href="/" className="text-lg font-bold">
-          TradeCoach
+          TradingCoach
         </Link>
 
         {/* Center: Nav links */}

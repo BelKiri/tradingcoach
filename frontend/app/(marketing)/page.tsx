@@ -315,8 +315,8 @@ function FAQ() {
       a: "Yes. Your data is stored in a secure database with row-level security \u2014 only you can see your trades. We never share or sell your data. You can delete everything at any time.",
     },
     {
-      q: "How is TradeCoach different from other trading analyzers?",
-      a: "Most analyzers show you what happened \u2014 win rate, P&L, basic stats. TradeCoach shows you why. We detect 9 behavioral patterns, analyze how volatility and macro events affect your performance, and provide AI-powered coaching with specific rules to fix your mistakes. No other tool combines behavioral analysis with AI coaching.",
+      q: "How is TradingCoach different from other trading analyzers?",
+      a: "Most analyzers show you what happened \u2014 win rate, P&L, basic stats. TradingCoach shows you why. We detect 9 behavioral patterns, analyze how volatility and macro events affect your performance, and provide AI-powered coaching with specific rules to fix your mistakes. No other tool combines behavioral analysis with AI coaching.",
     },
     {
       q: "How does the AI coaching work?",
@@ -324,7 +324,7 @@ function FAQ() {
     },
     {
       q: "Can I use this for crypto trading?",
-      a: "Yes. TradeCoach works for both forex and crypto traders. Import trades from Binance, Bybit, OKX via CSV/Excel now, or auto-sync via API (Pro plan).",
+      a: "Yes. TradingCoach works for both forex and crypto traders. Import trades from Binance, Bybit, OKX via CSV/Excel now, or auto-sync via API (Pro plan).",
     },
     {
       q: "Do I need to connect my broker?",
@@ -332,7 +332,7 @@ function FAQ() {
     },
     {
       q: "What if I have multiple accounts?",
-      a: "TradeCoach supports multiple accounts. Create separate accounts (e.g. \u2018Exness Main\u2019, \u2018Binance Futures\u2019) and analyze each one independently.",
+      a: "TradingCoach supports multiple accounts. Create separate accounts (e.g. \u2018Exness Main\u2019, \u2018Binance Futures\u2019) and analyze each one independently.",
     },
   ];
 

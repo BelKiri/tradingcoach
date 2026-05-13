@@ -130,10 +130,10 @@ export default function EconomicCalendar() {
 
       <div className="mt-8 text-center">
         <p className="text-sm text-muted-foreground">
-          TradeCoach checks news impact before every trade in the Trade Checker.
+          TradingCoach checks news impact before every trade in the Trade Checker.
         </p>
         <Button asChild variant="link" className="mt-1">
-          <Link href="/signup">Try TradeCoach free &rarr;</Link>
+          <Link href="/signup">Try TradingCoach free &rarr;</Link>
         </Button>
       </div>
     </div>

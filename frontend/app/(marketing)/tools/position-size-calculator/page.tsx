@@ -65,7 +65,7 @@ export default function PositionSizeCalculator() {
           Want to track if you actually follow your position sizing?
         </p>
         <Button asChild variant="link" className="mt-1">
-          <Link href="/signup">Try TradeCoach free &rarr;</Link>
+          <Link href="/signup">Try TradingCoach free &rarr;</Link>
         </Button>
       </div>
     </div>

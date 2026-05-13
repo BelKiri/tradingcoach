@@ -56,11 +56,11 @@ export default function PipCalculator() {
 
       <div className="mt-8 text-center">
         <p className="text-sm text-muted-foreground">
-          TradeCoach calculates pip values automatically from your trade
+          TradingCoach calculates pip values automatically from your trade
           history.
         </p>
         <Button asChild variant="link" className="mt-1">
-          <Link href="/signup">Try TradeCoach free &rarr;</Link>
+          <Link href="/signup">Try TradingCoach free &rarr;</Link>
         </Button>
       </div>
     </div>

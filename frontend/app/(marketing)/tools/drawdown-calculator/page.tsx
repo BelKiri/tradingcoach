@@ -60,10 +60,10 @@ export default function DrawdownCalculator() {
 
       <div className="mt-8 text-center">
         <p className="text-sm text-muted-foreground">
-          TradeCoach tracks your real drawdown from peak equity automatically.
+          TradingCoach tracks your real drawdown from peak equity automatically.
         </p>
         <Button asChild variant="link" className="mt-1">
-          <Link href="/signup">Try TradeCoach free &rarr;</Link>
+          <Link href="/signup">Try TradingCoach free &rarr;</Link>
         </Button>
       </div>
     </div>

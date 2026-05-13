@@ -58,7 +58,7 @@ export function AppNav() {
       <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-6">
         {/* Left: Logo */}
         <Link href="/app" className="font-bold text-white text-base">
-          TradeCoach
+          TradingCoach
         </Link>
 
         {/* Center: Nav Links */}

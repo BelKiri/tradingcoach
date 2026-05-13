@@ -62,7 +62,7 @@ function LoginForm() {
     <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center px-4 py-12">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Sign in to TradeCoach</CardTitle>
+          <CardTitle className="text-2xl">Sign in to TradingCoach</CardTitle>
           <p className="text-sm text-muted-foreground">
             Analyze your trades. Fix your habits.
           </p>
