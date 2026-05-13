@@ -1,11 +1,10 @@
-# Runbook 001: Deploy TradingCoach backend to Hetzner
+# Runbook 001: Deploy TradingCoach backend to VPS
 
-Server: `46.224.52.73` (Hetzner CPX22, Falkenstein)  
-User: `deploy`  
-Project dir: `/home/deploy/tradingcoach`  
+Server: `<SERVER_HOST>` (VPS provider, EU region)  
+Project dir: `~/tradingcoach`  
 Git remote: `https://github.com/BelKiri/tradingcoach.git` (public, no auth)  
-Backend bind: `127.0.0.1:8000` (loopback via Docker Compose)  
-Public HTTP: nginx on `:80` → `127.0.0.1:8000`
+Backend bind: `localhost:8000` (loopback via Docker Compose)  
+Public HTTP: nginx on `:80` → `localhost:8000`
 
 ## Server git safety
 
@@ -13,7 +12,7 @@ Public HTTP: nginx on `:80` → `127.0.0.1:8000`
 - Before every pull, reset tracked files to the last commit, then pull:
 
 ```bash
-cd /home/deploy/tradingcoach
+cd ~/tradingcoach
 git checkout -- .
 git pull
 ```
@@ -23,52 +22,35 @@ git pull
 From your Mac:
 
 ```bash
-ssh deploy@46.224.52.73
+ssh tradingcoach
 ```
 
 On the server:
 
 ```bash
-git clone https://github.com/BelKiri/tradingcoach.git /home/deploy/tradingcoach
-cd /home/deploy/tradingcoach
+git clone https://github.com/BelKiri/tradingcoach.git ~/tradingcoach
+cd ~/tradingcoach
 ```
 
-Create production `.env` manually (not committed to git):
+Create production `.env` from the example template (not committed to git):
 
 ```bash
-nano /home/deploy/tradingcoach/.env
-```
-
-Paste and fill real values:
-
-```env
-SUPABASE_URL=<REAL>
-SUPABASE_KEY=<REAL>
-SUPABASE_SERVICE_ROLE_KEY=<REAL>
-ANTHROPIC_API_KEY=<REAL>
-TWELVEDATA_API_KEY=<REAL>
-FINNHUB_API_KEY=<REAL>
-OPENAI_API_KEY=
-TELEGRAM_BOT_TOKEN=
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
-APP_ENV=production
-DEBUG=false
-LOG_LEVEL=INFO
+cp .env.example .env
+nano .env  # fill in real values per .env.example
 ```
 
 Build and start the API container:
 
 ```bash
-cd /home/deploy/tradingcoach
+cd ~/tradingcoach
 docker compose up -d --build
 ```
 
 ## Deploy update (after code changes)
 
 ```bash
-ssh deploy@46.224.52.73
-cd /home/deploy/tradingcoach
+ssh tradingcoach
+cd ~/tradingcoach
 git checkout -- .
 git pull
 docker compose up -d --build
@@ -79,7 +61,7 @@ docker compose up -d --build
 On the server (direct loopback to the API container):
 
 ```bash
-curl http://127.0.0.1:8000/health
+curl http://localhost:8000/health
 ```
 
 Expected response:
@@ -91,22 +73,22 @@ Expected response:
 After nginx is configured, from your Mac:
 
 ```bash
-curl http://46.224.52.73/health
+curl http://<SERVER_HOST>/health
 ```
 
 ## View logs
 
 ```bash
-ssh deploy@46.224.52.73
-cd /home/deploy/tradingcoach
+ssh tradingcoach
+cd ~/tradingcoach
 docker compose logs -f api
 ```
 
 ## Stop / restart
 
 ```bash
-ssh deploy@46.224.52.73
-cd /home/deploy/tradingcoach
+ssh tradingcoach
+cd ~/tradingcoach
 docker compose down
 docker compose restart api
 ```
@@ -114,8 +96,8 @@ docker compose restart api
 ## Rollback
 
 ```bash
-ssh deploy@46.224.52.73
-cd /home/deploy/tradingcoach
+ssh tradingcoach
+cd ~/tradingcoach
 git checkout -- .
 git checkout <prev-sha>
 docker compose up -d --build
@@ -128,7 +110,7 @@ Replace `<prev-sha>` with the last known good commit (for example `git log --one
 Run on the server before the first nginx-fronted request.
 
 ```bash
-ssh deploy@46.224.52.73
+ssh tradingcoach
 sudo apt update && sudo apt install -y nginx
 ```
 
@@ -136,12 +118,12 @@ sudo apt update && sudo apt install -y nginx
 sudo tee /etc/nginx/sites-available/tradingcoach <<'EOF'
 server {
     listen 80 default_server;
-    server_name 46.224.52.73;
+    server_name <SERVER_HOST>;
 
     client_max_body_size 20M;
 
     location / {
-        proxy_pass http://127.0.0.1:8000;
+        proxy_pass http://localhost:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
