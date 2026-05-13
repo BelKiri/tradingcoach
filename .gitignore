@@ -81,3 +81,7 @@ tradecoach/data/price_cache/
 
 # Cursor IDE local config (MCP secrets)
 .cursor/mcp.json
+
+# Private notes and tasks (never published)
+.private/
+.gitignore.backup-*
