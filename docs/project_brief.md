@@ -65,8 +65,7 @@ TradeCoach is NOT another dashboard like Myfxbook. Myfxbook shows WHAT happened.
 - **/reset**: two-step confirmation, deletes all user data
 - 22 handlers, reply keyboard (3 buttons) + inline keyboards for all flows
 
-### Database (Supabase, Frankfurt)
-- Project: `tradecoach`, ID: `hxessnrcskxjqdjpegkn`
+### Database (Supabase, EU region)
 - 6 tables with RLS: users, accounts, trades, emotions, user_settings, habit_scores
 - `users.id` references `auth.users(id)` — Supabase Auth is identity source
 - Dedup key: (symbol, opened_at rounded to minute, direction, lot)
@@ -148,7 +147,7 @@ TradeCoach is NOT another dashboard like Myfxbook. Myfxbook shows WHAT happened.
 |---|---|---|---|
 | Backend API | Python + FastAPI | Free | **BUILT** |
 | Telegram Bot | python-telegram-bot | Free | **BUILT** |
-| Database | Supabase (PostgreSQL, Frankfurt) | Free tier | **BUILT** |
+| Database | Supabase (PostgreSQL, EU region) | Free tier | **BUILT** |
 | Auth | Supabase Auth (Google + email) | Free tier | PLANNED |
 | Fast LLM | GPT-4o-mini | ~$0.20/user/month | **BUILT** |
 | Deep LLM | Claude Sonnet | ~$4/user/month | **BUILT** |

@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dashboard with equity curve, win rate, profit factor
 
 ### Architecture
-- Backend hosted on Hetzner VPS, deployed via Docker Compose
+- Backend hosted on self-managed VPS, deployed via Docker Compose
 - nginx reverse proxy for backend
 - Frontend hosted on Vercel
 - Supabase (Postgres + Auth) as data backend
