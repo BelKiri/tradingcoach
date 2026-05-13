@@ -78,3 +78,6 @@ tradecoach/data/price_cache/
 .env*
 !.env.example
 !.env.*.example
+
+# Cursor IDE local config (MCP secrets)
+.cursor/mcp.json
