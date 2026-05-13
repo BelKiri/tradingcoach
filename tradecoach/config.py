@@ -25,9 +25,6 @@ class Settings(BaseSettings):
     supabase_key: str  # anon/public key (used with RLS)
     supabase_service_role_key: str = ""  # service role key (bypasses RLS)
 
-    # Telegram
-    telegram_bot_token: str = ""
-
     # OpenAI
     openai_api_key: str = ""
 

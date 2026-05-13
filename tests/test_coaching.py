@@ -599,7 +599,7 @@ class TestCoachingAPI:
                 )
 
         assert resp.status_code == 400
-        assert "No trades found" in resp.json()["error"]
+        assert "Unable to generate coaching" in resp.json()["error"]
 
 
 # ===================================================================
