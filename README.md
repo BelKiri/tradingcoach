@@ -45,11 +45,11 @@ Requirements: Python 3.12, Docker.
 
 ### Frontend
 
-Requirements: Node.js 20+, pnpm.
+Requirements: Node.js 20+, npm.
 
 1. `cd frontend`
-2. `pnpm install`
-3. `pnpm dev`
+2. `npm install`
+3. `npm run dev`
 
 ## Configuration
 
