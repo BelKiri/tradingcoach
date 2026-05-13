@@ -1,4 +1,4 @@
-# ADR 001: Backend deployment via Docker Compose on Hetzner
+# ADR 001: Backend deployment via Docker Compose
 
 Status: Accepted
 
@@ -6,11 +6,9 @@ Date: 2026-05-11
 
 ## Context
 
-Backend (Python 3.11 + FastAPI) needs to run on Hetzner CPX22
+Backend (Python 3.11 + FastAPI) needs to run on the self-managed VPS
 
-(Falkenstein FSN1, see ADR-003). Server is provisioned with hardening
-
-complete (deploy user, UFW, fail2ban, Docker installed via cloud-init),
+chosen in ADR-003. Server is provisioned with hardening complete (non-root service user, UFW, fail2ban, Docker installed via cloud-init),
 
 but application code is not yet deployed.
 
@@ -126,7 +124,7 @@ See ADR-003 for the hosting-level decision that ruled out PaaS.
 
 - ~100–200 MB additional memory overhead vs bare venv (acceptable on
 
-  CPX22 with 4 GB RAM)
+  the chosen VPS instance)
 
 - One more abstraction layer when debugging unusual issues
 

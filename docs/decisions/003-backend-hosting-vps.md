@@ -1,4 +1,4 @@
-# ADR 003: Backend hosting on Hetzner CPX22 (Falkenstein)
+# ADR 003: Backend hosting on self-managed VPS
 
 Status: Accepted
 
@@ -6,25 +6,23 @@ Date: 2026-05-11
 
 ## Context
 
-`project_brief.md` (March 2026) originally planned Railway PaaS at
+`project_brief.md` (March 2026) originally planned PaaS at
 
 ~$5–10/month. After evaluation, that decision was reversed in favour of
 
-a self-managed VPS: Hetzner CPX22 (Falkenstein FSN1).
+a self-managed VPS in EU region.
 
-Server specs:
+Server tier:
 
-- Dedicated vCPU, 4 GB RAM, 80 GB SSD
+- Mid-tier VPS: dedicated vCPU, several GB RAM, SSD storage
 
-- ~€8/month flat
+- Flat monthly cost in single-digit EUR range
 
-- IP: 46.224.52.73
+- Location: EU region (same network neighborhood as Supabase EU)
 
-- Location: Falkenstein, Germany (same region as Supabase Frankfurt)
+The server is provisioned and hardened (non-root service user, UFW,
 
-The server is provisioned and hardened (deploy user, UFW, fail2ban,
-
-Docker installed). Application not yet deployed — see ADR-001 for the
+fail2ban, Docker installed). Application not yet deployed — see ADR-001 for the
 
 deployment-method decision.
 
@@ -34,7 +32,7 @@ re-evaluated from scratch in 6 months.
 
 ## Decision
 
-Self-managed VPS: Hetzner CPX22 in Falkenstein DC.
+Self-managed VPS in EU region.
 
 Hosting tier and provider are fixed for the MVP and early growth phase.
 
@@ -76,7 +74,7 @@ Better networking than Railway, edge deploys, decent free tier.
 
 Rejected because: same cost-unpredictability concern; edge deploys
 
-don't help a single-region MVP whose data lives in Supabase Frankfurt
+don't help a single-region MVP whose data lives in Supabase EU region
 
 anyway.
 
@@ -84,23 +82,21 @@ anyway.
 
 Equivalent capability. Rejected because:
 
-- Hetzner offers the best price/performance ratio in EU (~50% cheaper
+- The chosen provider offered the best price/performance ratio in EU
 
-  than the equivalent DO droplet at the time of decision)
+  at evaluation time
 
 - EU data residency is a useful default for future B2B compliance
 
   (broker white-label use case)
 
-- Frankfurt-region Supabase + Falkenstein VPS = same network neighborhood,
+- EU-region Supabase + EU VPS = same network neighborhood, low latency
 
-  low latency
+**4. Larger VPS tier (rejected for now)**
 
-**4. Larger Hetzner tier (CPX31, CPX41) (rejected for now)**
+Future-proof, more headroom. Rejected because: zero users, the
 
-Future-proof, more headroom. Rejected because: zero users, CPX22 is
-
-already overprovisioned for current load. Scale up later only if
+current tier is already overprovisioned for current load. Scale up later only if
 
 metrics demand it.
 
@@ -108,7 +104,7 @@ metrics demand it.
 
 **Positive:**
 
-- Predictable flat cost (~€8/month all-in)
+- Predictable flat cost in single-digit EUR range
 
 - Full control: can colocate n8n, scrapers, future services on the
 
@@ -120,7 +116,7 @@ metrics demand it.
 
   click-deploy abstraction
 
-- Low latency to Supabase Frankfurt (same region)
+- Low latency to Supabase EU region (same network neighborhood)
 
 - Reproducible: server provisioning via cloud-init + Docker is
 
@@ -142,7 +138,7 @@ metrics demand it.
 
   CI/CD is set up later
 
-- No built-in DDoS protection beyond what Hetzner provides at the edge
+- No built-in DDoS protection beyond what the provider offers at the edge
 
 **Follow-up tasks (not part of this ADR):**
 
