@@ -23,6 +23,8 @@
 
 **## Getting started** For local development: clone the repo, copy `.env.example` to `.env`, fill in API keys, run via Docker Compose. Calendar loads automatically when coaching is requested. 
 
-**## About this project** TradingCoach is built as a portfolio piece for transition to Senior AI PM roles. Architecture decisions are recorded in `docs/decisions/`, feature PRDs in `docs/prd/`. 
+**## About this project** 
+
+Architecture decisions are recorded in `docs/decisions/`, feature PRDs in `docs/prd/`.
 
 **## License** MIT
