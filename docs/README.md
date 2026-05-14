@@ -1,7 +1,6 @@
 ## TradingCoach Documentation
 
-- `prd.md` — current product PRD (source of truth for product scope)
-- `project_brief.md` — original March 2026 brief (historical, kept for context; superseded by `prd.md` where they differ)
+- `prd/` — PRD workspace (per-feature PRDs; how-to in `prd/README.md`)
+- `project_brief.md` — original March 2026 brief (historical, kept for context)
 - `decisions/` — Architecture Decision Records (ADRs)
-- `features/` — per-feature PRDs for non-trivial work
-- `tasks/` — implementation task files executed by Cursor Agent
+- `.private/tasks/` — implementation task files (not in repo; executed by Cursor Agent)

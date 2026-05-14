@@ -16,4 +16,4 @@ One markdown file per non-trivial feature. File: `feature-name.md`.
 - Dependency updates
 - Copy changes
 
-For those — direct task file in `docs/tasks/` is enough.
+For those — direct task file in `.private/tasks/` is enough.
