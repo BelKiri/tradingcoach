@@ -7,10 +7,12 @@ the API layer, services, and database queries.
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, time
 from typing import Literal
+from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -48,12 +50,41 @@ class User(BaseModel):
 # Accounts
 # ---------------------------------------------------------------------------
 
+_BROKER_TZ_UTC_OFFSET = re.compile(r"^UTC([+-]?\d+)$", re.IGNORECASE)
+
+
+def validate_broker_timezone_value(v: str) -> str:
+    """IANA zone id (e.g. Europe/Berlin) or broker-style UTC offset (UTC+2)."""
+    s = v.strip()
+    if not s:
+        raise ValueError("broker_timezone must be non-empty")
+    try:
+        ZoneInfo(s)
+        return s
+    except Exception:
+        pass
+    m = _BROKER_TZ_UTC_OFFSET.match(s)
+    if not m:
+        raise ValueError(
+            "broker_timezone must be a valid IANA timezone or UTC offset (e.g. UTC+2)"
+        )
+    inner = m.group(1)
+    if inner.startswith(("+", "-")):
+        return f"UTC{inner}"
+    return f"UTC+{inner}"
+
+
 class AccountCreate(BaseModel):
     user_id: str
     name: str
     broker: str | None = None
     starting_balance: float | None = None
     broker_timezone: str = "UTC+2"
+
+    @field_validator("broker_timezone")
+    @classmethod
+    def broker_timezone_iana_or_utc_offset(cls, v: str) -> str:
+        return validate_broker_timezone_value(v)
 
 
 class Account(AccountCreate):

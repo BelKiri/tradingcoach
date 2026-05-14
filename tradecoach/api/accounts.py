@@ -5,10 +5,10 @@ Accounts CRUD endpoints.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from tradecoach.api.auth import get_current_user, require_account_owner, require_self
-from tradecoach.db.models import AccountCreate
+from tradecoach.db.models import AccountCreate, validate_broker_timezone_value
 from tradecoach.db.queries import (
     create_account,
     delete_account,
@@ -30,6 +30,14 @@ class CreateAccountRequest(BaseModel):
     name: str
     broker: str | None = None
     starting_balance: float | None = None
+    broker_timezone: str | None = None
+
+    @field_validator("broker_timezone")
+    @classmethod
+    def broker_timezone_ok(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        return validate_broker_timezone_value(v)
 
 
 class RenameAccountRequest(BaseModel):
@@ -87,12 +95,15 @@ def create_new_account(req: CreateAccountRequest, auth_user: str = Depends(get_c
         create_user(client, UserCreate(id=req.user_id))
 
     try:
-        acct = create_account(client, AccountCreate(
+        payload = dict(
             user_id=req.user_id,
             name=req.name,
             broker=req.broker,
             starting_balance=req.starting_balance,
-        ))
+        )
+        if req.broker_timezone is not None:
+            payload["broker_timezone"] = req.broker_timezone
+        acct = create_account(client, AccountCreate(**payload))
     except Exception as exc:
         msg = str(exc)
         if "23505" in msg or "duplicate key" in msg.lower():

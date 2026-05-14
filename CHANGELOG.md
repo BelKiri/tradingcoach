@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Auth flow idempotency improvement
 - HTTPS for backend endpoint
 
+### Fixed
+- `broker_timezone` sent when creating an account is now stored on the account record.
+
 ### Changed
 - Rebuilt economic calendar with USD high-impact events for 2025-2026 (added PPI, Retail Sales, ISM Services PMI)
 - Fixed DST handling: event times now reflect actual UTC per date
