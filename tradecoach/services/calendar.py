@@ -106,12 +106,17 @@ def match_trades_to_events(
     trades: list[dict],
     events: list[dict[str, str]],
     broker_timezone: str = "UTC+2",
-    window_minutes: int = 60,
+    window_before_minutes: int = 30,
+    window_after_minutes: int = 60,
 ) -> list[dict[str, Any]]:
     """Match trades to nearby economic events.
 
-    For each trade, find events within `window_minutes` before or after
-    the trade's open time (both converted to UTC).
+    For each trade, find events where the trade open time (UTC) falls in an
+    asymmetric window around the event instant (UTC):
+
+        event_time - window_before_minutes <= trade_time <= event_time + window_after_minutes
+
+    Defaults: 30 minutes before the event, 60 minutes after (news window).
 
     Each trade appears at most once in results.
 
@@ -124,7 +129,6 @@ def match_trades_to_events(
 
     # Pre-compute event datetimes
     event_dts = [(e, _event_dt(e)) for e in events]
-    window = timedelta(minutes=window_minutes)
     results: list[dict[str, Any]] = []
 
     for trade in trades:
@@ -136,10 +140,11 @@ def match_trades_to_events(
         matched: list[dict[str, Any]] = []
 
         for event, evt_dt in event_dts:
-            diff = trade_utc - evt_dt
-            diff_minutes = diff.total_seconds() / 60
-
-            if abs(diff_minutes) <= window_minutes:
+            win_start = evt_dt - timedelta(minutes=window_before_minutes)
+            win_end = evt_dt + timedelta(minutes=window_after_minutes)
+            if win_start <= trade_utc <= win_end:
+                diff = trade_utc - evt_dt
+                diff_minutes = diff.total_seconds() / 60
                 matched.append({
                     "event": event,
                     "minutes_offset": round(diff_minutes),
@@ -159,12 +164,14 @@ def calculate_news_impact(
     trades: list[dict],
     events: list[dict[str, str]],
     broker_timezone: str = "UTC+2",
-    window_minutes: int = 60,
+    window_before_minutes: int = 30,
+    window_after_minutes: int = 60,
 ) -> dict[str, Any]:
     """Analyze the impact of news events on trading performance.
 
-    Splits trades into news_trades (opened near an event) and normal_trades,
-    then compares metrics.
+    Splits trades into news_trades (opened within the news window around an
+    event) and normal_trades, then compares metrics. The default window is
+    asymmetric: 30 minutes before through 60 minutes after each event (UTC).
 
     Returns dict with:
         news_trades_count, news_wr, news_pnl,
@@ -175,7 +182,11 @@ def calculate_news_impact(
     from tradecoach.services._helpers import _net_profit
 
     matched = match_trades_to_events(
-        trades, events, broker_timezone, window_minutes
+        trades,
+        events,
+        broker_timezone,
+        window_before_minutes=window_before_minutes,
+        window_after_minutes=window_after_minutes,
     )
 
     # Build set of trade indices that are news trades

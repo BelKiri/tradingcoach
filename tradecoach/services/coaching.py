@@ -228,7 +228,13 @@ def _build_calendar_section(
     if not events:
         return "=== ECONOMIC CALENDAR IMPACT ===\nNo high-impact events in this period."
 
-    impact = calculate_news_impact(trades, events, broker_timezone)
+    impact = calculate_news_impact(
+        trades,
+        events,
+        broker_timezone,
+        window_before_minutes=30,
+        window_after_minutes=60,
+    )
 
     lines: list[str] = ["=== ECONOMIC CALENDAR IMPACT ==="]
 

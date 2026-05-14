@@ -129,17 +129,63 @@ class TestMatchTradesToEvents:
         assert len(result) == 0
 
     def test_trade_outside_window_before(self):
-        """Trade at 12:29 UTC, event at 13:30 UTC → NOT match (61 min)."""
+        """Trade at 12:29 UTC, event at 13:30 UTC → NOT match (61 min before)."""
         trade = _make_trade("2025-01-10T12:29:00")
         result = match_trades_to_events([trade], [NFP_EVENT], "UTC+0")
         assert len(result) == 0
 
-    def test_exact_boundary_included(self):
-        """Trade exactly 60 min before event → match."""
-        trade = _make_trade("2025-01-10T12:30:00")
+    def test_boundary_30_min_before_included(self):
+        """Trade exactly on event_time - 30 min → match (inclusive lower bound)."""
+        trade = _make_trade("2025-01-10T13:00:00")
         result = match_trades_to_events([trade], [NFP_EVENT], "UTC+0")
         assert len(result) == 1
-        assert result[0]["matched_events"][0]["minutes_offset"] == -60
+        assert result[0]["matched_events"][0]["minutes_offset"] == -30
+
+    def test_boundary_60_min_after_included(self):
+        """Trade exactly on event_time + 60 min → match (inclusive upper bound)."""
+        trade = _make_trade("2025-01-10T14:30:00")
+        result = match_trades_to_events([trade], [NFP_EVENT], "UTC+0")
+        assert len(result) == 1
+        assert result[0]["matched_events"][0]["minutes_offset"] == 60
+
+    def test_trade_60_min_before_does_not_match(self):
+        """60 min before event is outside the default 30 min pre-window."""
+        trade = _make_trade("2025-01-10T12:30:00")
+        result = match_trades_to_events([trade], [NFP_EVENT], "UTC+0")
+        assert len(result) == 0
+
+    def test_trade_45_min_after_event_matches(self):
+        """Trade 45 min after NFP (within 60 min after) matches."""
+        trade = _make_trade("2025-01-10T14:15:00")
+        result = match_trades_to_events([trade], [NFP_EVENT], "UTC+0")
+        assert len(result) == 1
+        assert result[0]["matched_events"][0]["minutes_offset"] == 45
+
+    def test_trade_50_min_after_event_matches(self):
+        """Trade 50 min after NFP (within 60 min after) matches."""
+        trade = _make_trade("2025-01-10T14:20:00")
+        result = match_trades_to_events([trade], [NFP_EVENT], "UTC+0")
+        assert len(result) == 1
+        assert result[0]["matched_events"][0]["minutes_offset"] == 50
+
+    def test_trade_65_min_after_event_does_not_match(self):
+        """Trade 65 min after NFP is outside the 60 min post-window."""
+        trade = _make_trade("2025-01-10T14:35:00")
+        result = match_trades_to_events([trade], [NFP_EVENT], "UTC+0")
+        assert len(result) == 0
+
+    def test_trade_25_min_before_event_matches(self):
+        """Trade 25 min before NFP (within 30 min before) matches."""
+        trade = _make_trade("2025-01-10T13:05:00")
+        result = match_trades_to_events([trade], [NFP_EVENT], "UTC+0")
+        assert len(result) == 1
+        assert result[0]["matched_events"][0]["minutes_offset"] == -25
+
+    def test_trade_35_min_before_event_does_not_match(self):
+        """Trade 35 min before NFP is outside the 30 min pre-window."""
+        trade = _make_trade("2025-01-10T12:55:00")
+        result = match_trades_to_events([trade], [NFP_EVENT], "UTC+0")
+        assert len(result) == 0
 
     def test_broker_timezone_conversion(self):
         """Trade at 15:00 broker time (UTC+2) = 13:00 UTC → match NFP at 13:30."""

@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Auth flow idempotency improvement
 - HTTPS for backend endpoint
 
+### Changed
+- Rebuilt economic calendar with USD high-impact events for 2025-2026 (added PPI, Retail Sales, ISM Services PMI)
+- Fixed DST handling: event times now reflect actual UTC per date
+- Asymmetric matching window: 30 min before event, 60 min after
+
 ## [0.1.0] — 2026-05-12
 
 ### Added
