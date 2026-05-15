@@ -338,8 +338,8 @@ class TestEmotionBySession:
     def test_london_emotions(self):
         result = emotion_by_session(TRADES, EMOTIONS)
         london = result["London"]
-        # Trades at 10:00, 15:00, 11:00, 09:30, 10:30, 09:00 (8-16 UTC)
-        assert sum(data["trades"] for data in london.values()) == 6
+        # London-only opens: 10:00, 11:00, 09:30 UTC (15:00 UTC → New York first)
+        assert sum(data["trades"] for data in london.values()) == 5
 
     def test_empty(self):
         result = emotion_by_session([], [])
@@ -352,12 +352,12 @@ class TestEmotionBySession:
 
 class TestEmotionByHour:
     def test_hours_present(self):
-        result = emotion_by_hour(TRADES, EMOTIONS)
+        result = emotion_by_hour(TRADES, EMOTIONS, broker_timezone="UTC+0")
         assert 10 in result  # trades at 10:00
         assert 3 in result   # trade at 03:00
 
     def test_trade_count(self):
-        result = emotion_by_hour(TRADES, EMOTIONS)
+        result = emotion_by_hour(TRADES, EMOTIONS, broker_timezone="UTC+0")
         # Hour 10: trades 1 (calm) and 7 (confident, at 10:30)
         hour_10 = result[10]
         total = sum(data["trades"] for data in hour_10.values())

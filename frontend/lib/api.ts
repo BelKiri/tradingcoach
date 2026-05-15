@@ -51,7 +51,7 @@ export interface DashboardData {
   avg_loss: number | null;
   expectancy: number | null;
   max_drawdown: Record<string, number>;
-  equity_curve: Array<Record<string, unknown>>;
+  equity_curve: Array<{ day: string; label: string; equity: number }>;
   pnl_by_symbol: Record<string, { pnl: number; win_rate: number; trades: number }>;
   pnl_by_session: Record<string, { pnl: number; win_rate: number; trades: number }>;
   pnl_by_day_of_week: Record<string, { pnl: number; win_rate: number; trades: number }>;

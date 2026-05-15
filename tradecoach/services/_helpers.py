@@ -1,8 +1,8 @@
 """
 Shared helpers used across multiple service modules.
 
-Canonical definitions of _to_dt, _net_profit, _is_winner, _is_loser,
-_session_for_hour. Import from here instead of duplicating.
+Canonical definitions of _to_dt, _net_profit, _is_winner, _is_loser.
+Session labels use tradecoach.services.tz_utils.session_label_for_utc.
 """
 
 from __future__ import annotations
@@ -40,15 +40,3 @@ def _is_winner(t: dict) -> bool:
 
 def _is_loser(t: dict) -> bool:
     return _net_profit(t) < 0
-
-
-def _session_for_hour(hour: int) -> str:
-    """Map UTC hour to trading session."""
-    if 0 <= hour < 8:
-        return "Asian"
-    elif 8 <= hour < 16:
-        return "London"
-    elif 16 <= hour < 24:
-        return "New York"
-    else:
-        return "Asian"

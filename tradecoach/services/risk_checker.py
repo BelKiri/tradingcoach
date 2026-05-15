@@ -19,7 +19,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from tradecoach.services._helpers import _net_profit, _to_dt
+from datetime import datetime, timezone
+
+from tradecoach.services._helpers import _net_profit
+from tradecoach.services.tz_utils import trade_instant_utc
+
+_EPOCH_RISK = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
 # ---------------------------------------------------------------------------
@@ -291,7 +296,7 @@ def _check_losing_streak(
     # Sort by close time, count consecutive losses from the end
     sorted_trades = sorted(
         today_trades,
-        key=lambda t: _to_dt(t.get("closed_at")) or datetime.min,
+        key=lambda t: trade_instant_utc(t.get("closed_at")) or _EPOCH_RISK,
     )
 
     consecutive_losses = 0

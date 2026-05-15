@@ -12,14 +12,14 @@ import json
 import os
 import statistics
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 import httpx
 
-from tradecoach.services._helpers import _net_profit, _to_dt
-from tradecoach.services.calendar import convert_trade_time_to_utc
+from tradecoach.services._helpers import _net_profit
+from tradecoach.services.tz_utils import trade_instant_utc
 
 # ---------------------------------------------------------------------------
 # Paths & constants
@@ -319,7 +319,6 @@ def find_volatile_days(
 
 def analyze_trader_volatility(
     trades: list[dict],
-    broker_timezone: str = "UTC+2",
     ohlc_by_symbol: dict[str, list[dict[str, Any]]] | None = None,
     atr_multiplier: float = 1.5,
 ) -> dict[str, Any]:
@@ -345,7 +344,7 @@ def analyze_trader_volatility(
         s = (t.get("symbol") or "").upper()
         if s:
             symbols.add(s)
-        dt = _to_dt(t.get("opened_at"))
+        dt = trade_instant_utc(t.get("opened_at"))
         if dt:
             dates.append(dt)
 
@@ -353,8 +352,8 @@ def analyze_trader_volatility(
         return _empty_volatility_result()
 
     # Extra 20 days for ATR warmup
-    date_from = min(dates).strftime("%Y-%m-%d")
-    date_to = max(dates).strftime("%Y-%m-%d")
+    date_from = min(dates).astimezone(timezone.utc).strftime("%Y-%m-%d")
+    date_to = max(dates).astimezone(timezone.utc).strftime("%Y-%m-%d")
 
     # Find volatile days per symbol
     vol_days_by_symbol: dict[str, set[str]] = {}
@@ -378,13 +377,12 @@ def analyze_trader_volatility(
 
     for trade in trades:
         symbol = (trade.get("symbol") or "").upper()
-        opened = _to_dt(trade.get("opened_at"))
+        opened = trade_instant_utc(trade.get("opened_at"))
         if not opened:
             normal_trades.append(trade)
             continue
 
-        trade_utc = convert_trade_time_to_utc(opened, broker_timezone)
-        trade_date = trade_utc.strftime("%Y-%m-%d")
+        trade_date = opened.astimezone(timezone.utc).strftime("%Y-%m-%d")
 
         if trade_date in vol_days_by_symbol.get(symbol, set()):
             high_vol_trades.append(trade)
@@ -456,13 +454,12 @@ def _empty_volatility_result() -> dict[str, Any]:
 
 def build_volatility_context_for_coaching(
     trades: list[dict],
-    broker_timezone: str = "UTC+2",
     news: list[dict[str, str]] | None = None,
     ohlc_by_symbol: dict[str, list[dict[str, Any]]] | None = None,
 ) -> str:
     """Build formatted volatility analysis for AI coaching prompts."""
     result = analyze_trader_volatility(
-        trades, broker_timezone, ohlc_by_symbol=ohlc_by_symbol,
+        trades, ohlc_by_symbol=ohlc_by_symbol,
     )
 
     hv = result["high_vol"]
@@ -520,11 +517,11 @@ def build_volatility_context_for_coaching(
             losses = 0
             for t in trades:
                 s = (t.get("symbol") or "").upper()
-                opened = _to_dt(t.get("opened_at"))
+                opened = trade_instant_utc(t.get("opened_at"))
                 if not opened or s != symbol:
                     continue
-                t_utc = convert_trade_time_to_utc(opened, broker_timezone)
-                if t_utc.strftime("%Y-%m-%d") == date:
+                t_date = opened.astimezone(timezone.utc).strftime("%Y-%m-%d")
+                if t_date == date:
                     if _net_profit(t) > 0:
                         wins += 1
                     else:

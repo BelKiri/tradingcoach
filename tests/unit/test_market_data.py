@@ -253,36 +253,36 @@ class TestAnalyzeTraderVolatility:
 
     def test_split_counts(self):
         trades, ohlc, _ = self._build_scenario()
-        result = analyze_trader_volatility(trades, "UTC+0", ohlc_by_symbol=ohlc)
+        result = analyze_trader_volatility(trades, ohlc_by_symbol=ohlc)
         assert result["high_vol"]["count"] == 3
         assert result["normal"]["count"] == 7
 
     def test_high_vol_wr(self):
         trades, ohlc, _ = self._build_scenario()
-        result = analyze_trader_volatility(trades, "UTC+0", ohlc_by_symbol=ohlc)
+        result = analyze_trader_volatility(trades, ohlc_by_symbol=ohlc)
         # 1 win / 3 = 33.33%
         assert result["high_vol"]["wr"] == pytest.approx(33.33, abs=0.01)
 
     def test_normal_wr(self):
         trades, ohlc, _ = self._build_scenario()
-        result = analyze_trader_volatility(trades, "UTC+0", ohlc_by_symbol=ohlc)
+        result = analyze_trader_volatility(trades, ohlc_by_symbol=ohlc)
         # 5 wins / 7 = 71.43%
         assert result["normal"]["wr"] == pytest.approx(71.43, abs=0.01)
 
     def test_high_vol_pnl(self):
         trades, ohlc, _ = self._build_scenario()
-        result = analyze_trader_volatility(trades, "UTC+0", ohlc_by_symbol=ohlc)
+        result = analyze_trader_volatility(trades, ohlc_by_symbol=ohlc)
         assert result["high_vol"]["pnl"] == pytest.approx(-200.0, abs=0.01)
 
     def test_normal_pnl(self):
         trades, ohlc, _ = self._build_scenario()
-        result = analyze_trader_volatility(trades, "UTC+0", ohlc_by_symbol=ohlc)
+        result = analyze_trader_volatility(trades, ohlc_by_symbol=ohlc)
         # 40+30+60-50+45+35-40 = 120
         assert result["normal"]["pnl"] == pytest.approx(120.0, abs=0.01)
 
     def test_money_lost_to_volatility(self):
         trades, ohlc, _ = self._build_scenario()
-        result = analyze_trader_volatility(trades, "UTC+0", ohlc_by_symbol=ohlc)
+        result = analyze_trader_volatility(trades, ohlc_by_symbol=ohlc)
         # normal avg_pnl = 120/7 ≈ 17.14
         # money_lost = -200 - 3*17.14 ≈ -251.43
         assert result["money_lost_to_volatility"] < 0
@@ -290,7 +290,7 @@ class TestAnalyzeTraderVolatility:
 
     def test_volatile_day_details(self):
         trades, ohlc, vol_date = self._build_scenario()
-        result = analyze_trader_volatility(trades, "UTC+0", ohlc_by_symbol=ohlc)
+        result = analyze_trader_volatility(trades, ohlc_by_symbol=ohlc)
         days = result["high_vol"]["days"]
         assert len(days) >= 1
         vol_day = [d for d in days if d["date"] == vol_date]
@@ -307,17 +307,17 @@ class TestAnalyzeTraderVolatility:
         assert result["high_vol"]["count"] == 0
         assert result["normal"]["count"] == 0
 
-    def test_broker_timezone(self):
-        """Trade at 12:00 UTC+2 → 10:00 UTC → correct date for vol check."""
+    def test_opens_use_utc_calendar_date(self):
+        """opened_at naive is interpreted as UTC; same calendar day for vol split."""
         data = _make_volatile_scenario()
         vol_dates = _get_volatile_dates(data)
         assert len(vol_dates) >= 1
         vol_date = vol_dates[0]
 
-        # 12:00 broker (UTC+2) = 10:00 UTC → still same date
+        # 12:00 naive = 12:00 UTC wall clock; same calendar date as vol_date
         trades = [_trade("XAUUSD", f"{vol_date}T12:00:00", pnl=-100)]
         result = analyze_trader_volatility(
-            trades, "UTC+2", ohlc_by_symbol={"XAUUSD": data},
+            trades, ohlc_by_symbol={"XAUUSD": data},
         )
         assert result["high_vol"]["count"] == 1
 
@@ -344,7 +344,7 @@ class TestBuildVolatilityContext:
     def test_basic_output(self):
         trades, ohlc, vol_date = self._build_scenario()
         ctx = build_volatility_context_for_coaching(
-            trades, "UTC+0", ohlc_by_symbol=ohlc,
+            trades, ohlc_by_symbol=ohlc,
         )
         assert "VOLATILITY ANALYSIS:" in ctx
         assert "High-volatility days:" in ctx
@@ -355,7 +355,7 @@ class TestBuildVolatilityContext:
     def test_atr_language(self):
         trades, ohlc, _ = self._build_scenario()
         ctx = build_volatility_context_for_coaching(
-            trades, "UTC+0", ohlc_by_symbol=ohlc,
+            trades, ohlc_by_symbol=ohlc,
         )
         assert "ATR was 1.5x+ above normal BEFORE you entered" in ctx
         assert "ATR(14)" in ctx
@@ -363,7 +363,7 @@ class TestBuildVolatilityContext:
     def test_contains_wr_and_pnl(self):
         trades, ohlc, _ = self._build_scenario()
         ctx = build_volatility_context_for_coaching(
-            trades, "UTC+0", ohlc_by_symbol=ohlc,
+            trades, ohlc_by_symbol=ohlc,
         )
         assert "WR" in ctx
         assert "P&L" in ctx
@@ -371,7 +371,7 @@ class TestBuildVolatilityContext:
     def test_no_news_shows_no_data(self):
         trades, ohlc, _ = self._build_scenario()
         ctx = build_volatility_context_for_coaching(
-            trades, "UTC+0", news=None, ohlc_by_symbol=ohlc,
+            trades, news=None, ohlc_by_symbol=ohlc,
         )
         assert "no data available" in ctx
 
@@ -386,12 +386,12 @@ class TestBuildVolatilityContext:
             "category": "general",
         }]
         ctx = build_volatility_context_for_coaching(
-            trades, "UTC+0", news=news, ohlc_by_symbol=ohlc,
+            trades, news=news, ohlc_by_symbol=ohlc,
         )
         assert "Iran-Israel" in ctx
 
     def test_empty_trades(self):
-        ctx = build_volatility_context_for_coaching([], "UTC+0")
+        ctx = build_volatility_context_for_coaching([])
         assert ctx == ""
 
     def test_no_volatile_days(self):
@@ -399,27 +399,27 @@ class TestBuildVolatilityContext:
         data = _make_ohlc_series(30, normal_range=2.0)
         trades = [_trade("XAUUSD", f"{data[15]['date']}T10:00:00", pnl=40)]
         ctx = build_volatility_context_for_coaching(
-            trades, "UTC+0", ohlc_by_symbol={"XAUUSD": data},
+            trades, ohlc_by_symbol={"XAUUSD": data},
         )
         assert ctx == ""
 
     def test_money_lost_in_output(self):
         trades, ohlc, _ = self._build_scenario()
         ctx = build_volatility_context_for_coaching(
-            trades, "UTC+0", ohlc_by_symbol=ohlc,
+            trades, ohlc_by_symbol=ohlc,
         )
         assert "Difference:" in ctx
 
     def test_day_ratio_in_output(self):
         trades, ohlc, _ = self._build_scenario()
         ctx = build_volatility_context_for_coaching(
-            trades, "UTC+0", ohlc_by_symbol=ohlc,
+            trades, ohlc_by_symbol=ohlc,
         )
         assert "elevated ATR" in ctx
 
     def test_note_at_end(self):
         trades, ohlc, _ = self._build_scenario()
         ctx = build_volatility_context_for_coaching(
-            trades, "UTC+0", ohlc_by_symbol=ohlc,
+            trades, ohlc_by_symbol=ohlc,
         )
         assert "ATR calculated from 14 days before each trade" in ctx

@@ -7,7 +7,7 @@ Functions accept a Supabase client as the first argument for testability.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from supabase import Client
@@ -209,10 +209,32 @@ def get_trades(
     return [Trade(**r) for r in result.data]
 
 
-def get_trades_today(client: Client, user_id: str) -> list[Trade]:
-    """Get all trades opened today (UTC)."""
-    today = datetime.utcnow().date()
-    return get_trades(client, user_id, since=today)
+def get_trades_today(
+    client: Client,
+    user_id: str,
+    *,
+    broker_timezone: str | None = None,
+    account_id: str | None = None,
+) -> list[Trade]:
+    """Trades whose close time falls on broker-local calendar *today* (true UTC)."""
+    from tradecoach.services.tz_utils import (
+        DEFAULT_BROKER_TIMEZONE,
+        broker_today_utc_window,
+        trade_instant_utc,
+    )
+
+    btz = broker_timezone or DEFAULT_BROKER_TIMEZONE
+    start_utc, end_utc = broker_today_utc_window(btz)
+    lookback = (start_utc - timedelta(days=3)).date()
+    trades = get_trades(
+        client, user_id, since=lookback, account_id=account_id, limit=5000,
+    )
+    out: list[Trade] = []
+    for t in trades:
+        c = trade_instant_utc(t.closed_at)
+        if c is not None and start_utc <= c < end_utc:
+            out.append(t)
+    return out
 
 
 def find_existing_trade_keys(

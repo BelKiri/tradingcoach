@@ -7,14 +7,14 @@ from __future__ import annotations
 import json
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 import httpx
 
 from tradecoach.services._helpers import _net_profit, _to_dt
-from tradecoach.services.calendar import convert_trade_time_to_utc
+from tradecoach.services.tz_utils import trade_instant_utc
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -204,16 +204,11 @@ def match_news_to_instruments(news_item: dict[str, str]) -> list[str]:
 def get_relevant_news_for_trades(
     trades: list[dict],
     news: list[dict[str, str]],
-    broker_timezone: str = "UTC+2",
     window_hours: int = 2,
 ) -> list[dict[str, Any]]:
     """For each trade, find news published within window_hours BEFORE the trade.
 
-    Only includes news that matches the trade's instrument.
-
-    Returns:
-        List of {trade, relevant_news: [{headline, source, date, category,
-        matched_via}]}.
+    Trade open and news timestamps are compared in true UTC.
     """
     if not trades or not news:
         return []
@@ -225,7 +220,9 @@ def get_relevant_news_for_trades(
     parsed_news: list[tuple[dict[str, str], datetime, list[str], str]] = []
     for item in news:
         try:
-            news_dt = datetime.strptime(item["date"], "%Y-%m-%d %H:%M")
+            news_dt = datetime.strptime(
+                item["date"], "%Y-%m-%d %H:%M",
+            ).replace(tzinfo=timezone.utc)
         except (ValueError, KeyError):
             continue
 
@@ -237,11 +234,9 @@ def get_relevant_news_for_trades(
     results: list[dict[str, Any]] = []
 
     for trade in trades:
-        opened = _to_dt(trade.get("opened_at"))
-        if not opened:
+        trade_utc = trade_instant_utc(trade.get("opened_at"))
+        if not trade_utc:
             continue
-
-        trade_utc = convert_trade_time_to_utc(opened, broker_timezone)
         symbol = (trade.get("symbol") or "").upper()
         relevant: list[dict[str, str]] = []
 
@@ -311,14 +306,13 @@ def _match_via_for_symbol(
 def build_news_context_for_coaching(
     trades: list[dict],
     news: list[dict[str, str]],
-    broker_timezone: str = "UTC+2",
 ) -> str:
     """Build a formatted string of news context for AI coaching prompts.
 
     Groups trades by instrument, shows which had relevant news nearby,
     and compares WR/PnL for trades with vs without news.
     """
-    matched = get_relevant_news_for_trades(trades, news, broker_timezone)
+    matched = get_relevant_news_for_trades(trades, news)
     if not matched:
         return ""
 

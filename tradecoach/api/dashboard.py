@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from tradecoach.api.auth import get_current_user, require_self
 from tradecoach.db.queries import get_account, get_client, get_trades
 from tradecoach.services import trade_analyzer as ta
+from tradecoach.services.tz_utils import DEFAULT_BROKER_TIMEZONE
 
 router = APIRouter()
 
@@ -80,12 +81,12 @@ def get_dashboard(
 
     # Get account balance and timezone for calculations
     account_balance: float | None = None
-    broker_timezone: str = "UTC+0"
+    broker_timezone: str = DEFAULT_BROKER_TIMEZONE
     if account_id:
         acct = get_account(client, account_id)
         if acct:
             account_balance = acct.starting_balance
-            broker_timezone = acct.broker_timezone or "UTC+0"
+            broker_timezone = acct.broker_timezone or DEFAULT_BROKER_TIMEZONE
 
     result = ta.full_analysis(
         trade_dicts,
@@ -96,7 +97,7 @@ def get_dashboard(
     # Behavioral analysis
     revenge = ta.detect_revenge_trades(trade_dicts)
     mart = ta.detect_martingale(trade_dicts)
-    ot = ta.detect_overtrading(trade_dicts)
+    ot = ta.detect_overtrading(trade_dicts, broker_timezone=broker_timezone)
     avg_down = ta.detect_averaging_down(trade_dicts)
     quick = ta.detect_quick_exits(trade_dicts)
     sl = ta.sl_usage(trade_dicts)

@@ -1,6 +1,6 @@
 """Tests for trade_analyzer.py — all pure math, no AI."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -62,6 +62,15 @@ def _trade(
     moved_stop=False,
     source="csv",
 ):
+    def _as_utc_iso(val):
+        if val is None:
+            return val
+        if isinstance(val, datetime):
+            return val
+        if isinstance(val, str) and "+" not in val and not val.endswith("Z"):
+            return val + "+00:00"
+        return val
+
     return {
         "ticket": ticket,
         "symbol": symbol,
@@ -75,8 +84,8 @@ def _trade(
         "profit_money": profit_money,
         "commission": commission,
         "swap": swap,
-        "opened_at": opened_at,
-        "closed_at": closed_at,
+        "opened_at": _as_utc_iso(opened_at),
+        "closed_at": _as_utc_iso(closed_at),
         "followed_plan": followed_plan,
         "moved_stop": moved_stop,
         "source": source,
@@ -217,9 +226,10 @@ class TestPnL:
 
 
 class TestEquityCurve:
-    def test_length_matches_trades(self):
+    def test_one_point_per_broker_close_day(self):
         curve = equity_curve(TRADES)
-        assert len(curve) == len(TRADES)
+        # Six trades span five broker-local close dates (UTC+2 default)
+        assert len(curve) == 5
 
     def test_cumulative(self):
         curve = equity_curve(TRADES)
@@ -229,14 +239,14 @@ class TestEquityCurve:
     def test_has_required_keys(self):
         curve = equity_curve(TRADES)
         for point in curve:
-            assert "closed_at" in point
+            assert "day" in point
+            assert "label" in point
             assert "equity" in point
-            assert "trade_pnl" in point
 
-    def test_sorted_by_close_time(self):
+    def test_sorted_by_calendar_day(self):
         curve = equity_curve(TRADES)
-        times = [c["closed_at"] for c in curve if c["closed_at"]]
-        assert times == sorted(times)
+        days = [c["day"] for c in curve]
+        assert days == sorted(days)
 
     def test_empty(self):
         assert equity_curve([]) == []
@@ -349,12 +359,11 @@ class TestPnlBySession:
         assert total == len(TRADES)
 
     def test_session_mapping(self):
-        # Trade at 03:00 → Asian, 10:00 → London, 15:00 → London, 16:00 → NY
-        # Session boundaries: Asian 00-07, London 08-15, NY 16-23
+        # IANA session windows (UTC-anchored); New York checked before London
         by_sess = pnl_by_session(TRADES)
-        assert by_sess["Asian"]["trades"] == 1   # USDJPY at 03:00
-        assert by_sess["London"]["trades"] == 4  # 10:00, 11:00, 09:30, 15:00
-        assert by_sess["New York"]["trades"] == 1  # 16:00
+        assert by_sess["Asian"]["trades"] == 1   # USDJPY at 03:00 UTC
+        assert by_sess["London"]["trades"] == 3  # 09:30, 10:00, 11:00 UTC
+        assert by_sess["New York"]["trades"] == 2  # 15:00, 16:00 UTC (overlap → NY)
 
 
 class TestPnlByDayOfWeek:
@@ -375,12 +384,13 @@ class TestPnlByDayOfWeek:
 
 class TestPnlByHour:
     def test_hours_present(self):
-        by_hour = pnl_by_hour(TRADES)
-        assert 10 in by_hour  # EURUSD opened at 10:00
-        assert 3 in by_hour   # USDJPY opened at 03:00
+        # Literal times in TRADES are stored as UTC; bucket in UTC wall hours
+        by_hour = pnl_by_hour(TRADES, broker_timezone="UTC+0")
+        assert 10 in by_hour  # EURUSD opened at 10:00 UTC
+        assert 3 in by_hour   # USDJPY opened at 03:00 UTC
 
     def test_trade_counts(self):
-        by_hour = pnl_by_hour(TRADES)
+        by_hour = pnl_by_hour(TRADES, broker_timezone="UTC+0")
         total = sum(h["trades"] for h in by_hour.values())
         assert total == len(TRADES)
 
@@ -1180,7 +1190,7 @@ class TestWorstHours:
                    opened_at="2024-01-17T10:15:00",
                    closed_at="2024-01-17T11:00:00"),
         ]
-        result = worst_hours(trades, min_trades=3)
+        result = worst_hours(trades, min_trades=3, broker_timezone="UTC+0")
         assert len(result) >= 1
         assert result[0]["hour"] == 10
         assert result[0]["pnl"] < 0
@@ -1192,7 +1202,7 @@ class TestWorstHours:
                    closed_at=f"2024-01-{15+i}T15:00:00")
             for i in range(3)
         ]
-        result = worst_hours(trades, min_trades=3)
+        result = worst_hours(trades, min_trades=3, broker_timezone="UTC+0")
         assert len(result) == 0
 
     def test_empty(self):

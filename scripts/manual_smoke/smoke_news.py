@@ -91,7 +91,7 @@ for n in news:
 print("=" * 70)
 print("COACHING CONTEXT STRING")
 print("=" * 70)
-ctx = build_news_context_for_coaching(trades, news, broker_timezone="UTC+2")
+ctx = build_news_context_for_coaching(trades, news)
 if ctx:
     print(ctx)
 else:
@@ -101,7 +101,7 @@ print()
 # ---------------------------------------------------------------------------
 # 7. Summary stats
 # ---------------------------------------------------------------------------
-matched_results = get_relevant_news_for_trades(trades, news, "UTC+2")
+matched_results = get_relevant_news_for_trades(trades, news)
 news_trade_ids = set()
 for m in matched_results:
     news_trade_ids.add(id(m["trade"]))

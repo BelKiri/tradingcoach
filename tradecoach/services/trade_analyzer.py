@@ -12,15 +12,22 @@ source, followed_plan, moved_stop.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from tradecoach.services._helpers import (
     _is_loser,
     _is_winner,
     _net_profit,
-    _session_for_hour,
-    _to_dt,
+)
+from tradecoach.services.tz_utils import (
+    DEFAULT_BROKER_TIMEZONE,
+    broker_calendar_date_str,
+    broker_local_hour,
+    broker_local_weekday,
+    resolve_broker_tz,
+    session_label_for_utc,
+    trade_instant_utc,
 )
 
 
@@ -87,24 +94,31 @@ def expectancy(trades: list[dict]) -> float | None:
 # Equity curve & drawdown
 # ---------------------------------------------------------------------------
 
-def equity_curve(trades: list[dict]) -> list[dict[str, Any]]:
-    """Cumulative equity curve sorted by close time.
+def equity_curve(
+    trades: list[dict], *, broker_timezone: str | None = None,
+) -> list[dict[str, Any]]:
+    """Cumulative equity by broker-local calendar day (sorted by close time).
 
-    Returns list of {closed_at, equity, trade_pnl}.
+    Returns list of {day, label, equity} — one row per broker-local date
+    with end-of-day cumulative equity after each close on that day.
     """
+    tz_name = broker_timezone or DEFAULT_BROKER_TIMEZONE
     sorted_trades = _sort_by_close(trades)
-    curve = []
     cumulative = 0.0
+    by_day: dict[str, float] = {}
     for t in sorted_trades:
         pnl = _net_profit(t)
         cumulative += pnl
-        closed = t.get("closed_at")
-        curve.append({
-            "closed_at": closed,
-            "equity": round(cumulative, 2),
-            "trade_pnl": round(pnl, 2),
-        })
-    return curve
+        c_utc = trade_instant_utc(t.get("closed_at"))
+        if c_utc:
+            day_key = broker_calendar_date_str(c_utc, tz_name)
+            by_day[day_key] = round(cumulative, 2)
+    out: list[dict[str, Any]] = []
+    for day_key in sorted(by_day.keys()):
+        d = datetime.fromisoformat(day_key + "T12:00:00+00:00")
+        label = d.strftime("%b %d")
+        out.append({"day": day_key, "label": label, "equity": by_day[day_key]})
+    return out
 
 
 def max_drawdown(
@@ -175,23 +189,20 @@ def pnl_by_symbol(trades: list[dict]) -> dict[str, dict[str, Any]]:
     return result
 
 
-def pnl_by_session(
-    trades: list[dict], broker_timezone: str = "UTC+0",
-) -> dict[str, dict[str, Any]]:
-    """P&L by trading session (Asian/London/New York).
+def pnl_by_session(trades: list[dict]) -> dict[str, dict[str, Any]]:
+    """P&L by trading session (Asian / London / New York).
 
-    Uses opened_at, falls back to closed_at if opened_at is missing.
-    Converts from broker_timezone to UTC before mapping to session.
+    Uses trade open time in true UTC mapped to IANA session windows
+    (Asia/Tokyo, Europe/London, America/New_York). No broker_timezone —
+    external-system convention.
     """
-    from tradecoach.services.calendar import _parse_tz_offset
-
-    offset = _parse_tz_offset(broker_timezone)
     groups: dict[str, list[dict]] = defaultdict(list)
     for t in trades:
-        dt = _to_dt(t.get("opened_at")) or _to_dt(t.get("closed_at"))
+        dt = trade_instant_utc(t.get("opened_at")) or trade_instant_utc(
+            t.get("closed_at")
+        )
         if dt:
-            utc_hour = (dt.hour - offset) % 24
-            session = _session_for_hour(utc_hour)
+            session = session_label_for_utc(dt)
         else:
             session = "Unknown"
         groups[session].append(t)
@@ -208,15 +219,19 @@ def pnl_by_session(
     return result
 
 
-def pnl_by_day_of_week(trades: list[dict]) -> dict[str, dict[str, Any]]:
-    """P&L by day of week based on open time."""
+def pnl_by_day_of_week(
+    trades: list[dict], broker_timezone: str | None = None,
+) -> dict[str, dict[str, Any]]:
+    """P&L by weekday in broker-local calendar (open time)."""
+    tz_name = broker_timezone or DEFAULT_BROKER_TIMEZONE
     day_names = ["Monday", "Tuesday", "Wednesday", "Thursday",
                  "Friday", "Saturday", "Sunday"]
     groups: dict[str, list[dict]] = defaultdict(list)
     for t in trades:
-        dt = _to_dt(t.get("opened_at"))
+        dt = trade_instant_utc(t.get("opened_at"))
         if dt:
-            groups[day_names[dt.weekday()]].append(t)
+            wd = broker_local_weekday(dt, tz_name)
+            groups[day_names[wd]].append(t)
 
     result = {}
     for day in day_names:
@@ -234,21 +249,16 @@ def pnl_by_day_of_week(trades: list[dict]) -> dict[str, dict[str, Any]]:
 
 
 def pnl_by_hour(
-    trades: list[dict], broker_timezone: str = "UTC+0",
+    trades: list[dict], broker_timezone: str | None = None,
 ) -> dict[int, dict[str, Any]]:
-    """P&L by hour of day (0-23 UTC) based on open time.
-
-    Converts from broker_timezone to UTC before grouping.
-    """
-    from tradecoach.services.calendar import _parse_tz_offset
-
-    offset = _parse_tz_offset(broker_timezone)
+    """P&L by hour of day (0-23) in broker-local time from open instant (UTC)."""
+    tz_name = broker_timezone or DEFAULT_BROKER_TIMEZONE
     groups: dict[int, list[dict]] = defaultdict(list)
     for t in trades:
-        dt = _to_dt(t.get("opened_at"))
+        dt = trade_instant_utc(t.get("opened_at"))
         if dt:
-            utc_hour = (dt.hour - offset) % 24
-            groups[utc_hour].append(t)
+            h = broker_local_hour(dt, tz_name)
+            groups[h].append(t)
 
     result = {}
     for hour in sorted(groups.keys()):
@@ -292,11 +302,14 @@ def hold_time_stats(trades: list[dict]) -> dict[str, Any] | None:
     }
 
 
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
 def _hold_times(trades: list[dict]) -> list[timedelta]:
     durations = []
     for t in trades:
-        opened = _to_dt(t.get("opened_at"))
-        closed = _to_dt(t.get("closed_at"))
+        opened = trade_instant_utc(t.get("opened_at"))
+        closed = trade_instant_utc(t.get("closed_at"))
         if opened and closed and closed > opened:
             durations.append(closed - opened)
     return durations
@@ -532,14 +545,14 @@ def detect_revenge_trades(
     for loss in sorted_by_close:
         if not _is_loser(loss):
             continue
-        loss_closed = _to_dt(loss.get("closed_at"))
+        loss_closed = trade_instant_utc(loss.get("closed_at"))
         if not loss_closed:
             continue
 
         for t in trades:
             if t is loss or id(t) in flagged_ids:
                 continue
-            t_opened = _to_dt(t.get("opened_at"))
+            t_opened = trade_instant_utc(t.get("opened_at"))
             if not t_opened:
                 continue
             gap = (t_opened - loss_closed).total_seconds()
@@ -568,18 +581,16 @@ def revenge_trade_cost(trades: list[dict], **kwargs: Any) -> float:
 # ---------------------------------------------------------------------------
 
 def detect_overtrading(
-    trades: list[dict], *, threshold: int = 5
+    trades: list[dict], *, threshold: int = 5, broker_timezone: str | None = None,
 ) -> dict[str, Any]:
-    """Detect days with too many trades (threshold+).
-
-    Returns {overtrading_days, normal_days, overtrading_wr, normal_wr,
-             overtrading_pnl, normal_pnl}.
-    """
+    """Detect broker-local calendar days with too many trades (threshold+)."""
+    tz_name = broker_timezone or DEFAULT_BROKER_TIMEZONE
     by_day: dict[str, list[dict]] = defaultdict(list)
     for t in trades:
-        dt = _to_dt(t.get("opened_at"))
+        dt = trade_instant_utc(t.get("opened_at"))
         if dt:
-            by_day[dt.strftime("%Y-%m-%d")].append(t)
+            day_key = broker_calendar_date_str(dt, tz_name)
+            by_day[day_key].append(t)
 
     ot_trades: list[dict] = []
     normal_trades: list[dict] = []
@@ -632,10 +643,10 @@ def detect_martingale(trades: list[dict]) -> list[dict[str, Any]]:
         if not sym:
             continue
 
-        t_opened = _to_dt(t.get("opened_at"))
+        t_opened = trade_instant_utc(t.get("opened_at"))
         prev = last_closed_by_symbol.get(sym)
         if prev is not None and _is_loser(prev) and t_opened:
-            prev_closed = _to_dt(prev.get("closed_at"))
+            prev_closed = trade_instant_utc(prev.get("closed_at"))
             if prev_closed:
                 gap = (t_opened - prev_closed).total_seconds()
                 if 0 <= gap <= 3600:
@@ -667,8 +678,8 @@ def detect_quick_exits(
     """
     results: list[dict[str, Any]] = []
     for t in trades:
-        opened = _to_dt(t.get("opened_at"))
-        closed = _to_dt(t.get("closed_at"))
+        opened = trade_instant_utc(t.get("opened_at"))
+        closed = trade_instant_utc(t.get("closed_at"))
         if not opened or not closed:
             continue
         hold = (closed - opened).total_seconds()
@@ -706,7 +717,7 @@ def detect_averaging_down(trades: list[dict]) -> list[dict[str, Any]]:
     for b in sorted_trades:
         if id(b) in flagged_ids:
             continue
-        b_opened = _to_dt(b.get("opened_at"))
+        b_opened = trade_instant_utc(b.get("opened_at"))
         if not b_opened:
             continue
         b_sym = (b.get("symbol") or "")
@@ -715,8 +726,8 @@ def detect_averaging_down(trades: list[dict]) -> list[dict[str, Any]]:
         for a in sorted_trades:
             if a is b:
                 continue
-            a_opened = _to_dt(a.get("opened_at"))
-            a_closed = _to_dt(a.get("closed_at"))
+            a_opened = trade_instant_utc(a.get("opened_at"))
+            a_closed = trade_instant_utc(a.get("closed_at"))
             if not a_opened or not a_closed:
                 continue
             if (a.get("symbol") or "") != b_sym or a.get("direction") != b_dir:
@@ -739,15 +750,20 @@ def detect_averaging_down(trades: list[dict]) -> list[dict[str, Any]]:
 # Behavioral: weekend holding
 # ---------------------------------------------------------------------------
 
-def detect_weekend_holds(trades: list[dict]) -> list[dict]:
-    """Find trades held over a weekend (opened Fri, closed Mon+)."""
+def detect_weekend_holds(
+    trades: list[dict], broker_timezone: str | None = None,
+) -> list[dict]:
+    """Trades held over a weekend (opened Fri broker-local, closed Mon+)."""
+    tz = resolve_broker_tz(broker_timezone or DEFAULT_BROKER_TIMEZONE)
     results: list[dict] = []
     for t in trades:
-        opened = _to_dt(t.get("opened_at"))
-        closed = _to_dt(t.get("closed_at"))
+        opened = trade_instant_utc(t.get("opened_at"))
+        closed = trade_instant_utc(t.get("closed_at"))
         if not opened or not closed:
             continue
-        if opened.weekday() == 4 and closed.weekday() in (0, 1, 2, 3, 4):
+        o_loc = opened.astimezone(tz)
+        c_loc = closed.astimezone(tz)
+        if o_loc.weekday() == 4 and c_loc.weekday() in (0, 1, 2, 3, 4):
             if (closed - opened).days >= 2:
                 results.append(t)
     return results
@@ -758,21 +774,27 @@ def detect_weekend_holds(trades: list[dict]) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def win_rate_after_n_losses(
-    trades: list[dict], n: int = 3
+    trades: list[dict], n: int = 3, broker_timezone: str | None = None,
 ) -> dict[str, Any]:
-    """Win rate of trades taken after N consecutive losses in a day.
+    """Win rate of trades taken after N consecutive losses in a broker-local day.
 
     Returns {trades_after_streak, win_rate, pnl}.
     """
+    tz_name = broker_timezone or DEFAULT_BROKER_TIMEZONE
     sorted_trades = _sort_by_open(trades)
     by_day: dict[str, list[dict]] = defaultdict(list)
     for t in sorted_trades:
-        dt = _to_dt(t.get("opened_at"))
+        dt = trade_instant_utc(t.get("opened_at"))
         if dt:
-            by_day[dt.strftime("%Y-%m-%d")].append(t)
+            day_key = broker_calendar_date_str(dt, tz_name)
+            by_day[day_key].append(t)
 
     after_streak: list[dict] = []
-    for day_trades in by_day.values():
+    for day_key in sorted(by_day.keys()):
+        day_trades = sorted(
+            by_day[day_key],
+            key=lambda x: trade_instant_utc(x.get("opened_at")) or _EPOCH,
+        )
         loss_count = 0
         for t in day_trades:
             if loss_count >= n:
@@ -795,7 +817,7 @@ def win_rate_after_n_losses(
 
 def worst_hours(
     trades: list[dict], *, min_trades: int = 3,
-    broker_timezone: str = "UTC+0",
+    broker_timezone: str | None = None,
 ) -> list[dict[str, Any]]:
     """Find hours with negative P&L and enough trades.
 
@@ -817,12 +839,13 @@ def full_analysis(
     trades: list[dict],
     *,
     account_balance: float | None = None,
-    broker_timezone: str = "UTC+0",
+    broker_timezone: str | None = None,
 ) -> dict[str, Any]:
     """Compute all dashboard metrics in one call.
 
     Returns a dict with all analysis results.
     """
+    bt = broker_timezone or DEFAULT_BROKER_TIMEZONE
     return {
         "total_trades": len(trades),
         "win_rate": win_rate(trades),
@@ -834,11 +857,11 @@ def full_analysis(
         "avg_loss": avg_loss(trades),
         "expectancy": expectancy(trades),
         "max_drawdown": max_drawdown(trades, account_balance=account_balance),
-        "equity_curve": equity_curve(trades),
+        "equity_curve": equity_curve(trades, broker_timezone=bt),
         "pnl_by_symbol": pnl_by_symbol(trades),
-        "pnl_by_session": pnl_by_session(trades, broker_timezone=broker_timezone),
-        "pnl_by_day_of_week": pnl_by_day_of_week(trades),
-        "pnl_by_hour": pnl_by_hour(trades, broker_timezone=broker_timezone),
+        "pnl_by_session": pnl_by_session(trades),
+        "pnl_by_day_of_week": pnl_by_day_of_week(trades, broker_timezone=bt),
+        "pnl_by_hour": pnl_by_hour(trades, broker_timezone=bt),
         "hold_time": hold_time_stats(trades),
         "streaks": streaks(trades),
         "revenge_trades": detect_revenge_trades(trades),
@@ -852,13 +875,13 @@ def full_analysis(
 
 def _sort_by_close(trades: list[dict]) -> list[dict]:
     def key(t: dict) -> datetime:
-        dt = _to_dt(t.get("closed_at"))
-        return dt if dt else datetime.min
+        dt = trade_instant_utc(t.get("closed_at"))
+        return dt if dt else _EPOCH
     return sorted(trades, key=key)
 
 
 def _sort_by_open(trades: list[dict]) -> list[dict]:
     def key(t: dict) -> datetime:
-        dt = _to_dt(t.get("opened_at"))
-        return dt if dt else datetime.min
+        dt = trade_instant_utc(t.get("opened_at"))
+        return dt if dt else _EPOCH
     return sorted(trades, key=key)

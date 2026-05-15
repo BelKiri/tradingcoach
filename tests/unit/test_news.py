@@ -156,7 +156,7 @@ class TestGetRelevantNewsForTrades:
         """Trade at 14:00, news at 13:00 → matched (1 hour before)."""
         trades = [_trade("XAUUSD", "2025-01-10T14:00:00")]
         news = [_news("Gold rises sharply", date="2025-01-10 13:00")]
-        result = get_relevant_news_for_trades(trades, news, "UTC+0")
+        result = get_relevant_news_for_trades(trades, news)
         assert len(result) == 1
         assert result[0]["relevant_news"][0]["headline"] == "Gold rises sharply"
 
@@ -164,21 +164,21 @@ class TestGetRelevantNewsForTrades:
         """Trade at 14:00, news at 11:59 → NOT matched (>2 hours)."""
         trades = [_trade("XAUUSD", "2025-01-10T14:00:00")]
         news = [_news("Gold rises sharply", date="2025-01-10 11:59")]
-        result = get_relevant_news_for_trades(trades, news, "UTC+0")
+        result = get_relevant_news_for_trades(trades, news)
         assert len(result) == 0
 
     def test_wrong_instrument(self):
         """Trade EURUSD at 14:00, news 'gold rises' at 13:00 → NOT matched."""
         trades = [_trade("EURUSD", "2025-01-10T14:00:00")]
         news = [_news("Gold rises sharply", date="2025-01-10 13:00")]
-        result = get_relevant_news_for_trades(trades, news, "UTC+0")
+        result = get_relevant_news_for_trades(trades, news)
         assert len(result) == 0
 
     def test_cross_asset_match(self):
         """Trade XAUUSD at 14:00, news 'Iran attacks' at 13:30 → matched via cross-asset."""
         trades = [_trade("XAUUSD", "2025-01-10T14:00:00")]
         news = [_news("Iran launches attack on base", date="2025-01-10 13:30")]
-        result = get_relevant_news_for_trades(trades, news, "UTC+0")
+        result = get_relevant_news_for_trades(trades, news)
         assert len(result) == 1
         assert result[0]["relevant_news"][0]["matched_via"] == "cross-asset"
 
@@ -186,15 +186,8 @@ class TestGetRelevantNewsForTrades:
         """News at 15:00, trade at 14:00 → NOT matched (news is after trade)."""
         trades = [_trade("XAUUSD", "2025-01-10T14:00:00")]
         news = [_news("Gold rises sharply", date="2025-01-10 15:00")]
-        result = get_relevant_news_for_trades(trades, news, "UTC+0")
+        result = get_relevant_news_for_trades(trades, news)
         assert len(result) == 0
-
-    def test_broker_timezone_applied(self):
-        """Trade at 16:00 broker (UTC+2) = 14:00 UTC, news at 13:00 UTC → matched."""
-        trades = [_trade("XAUUSD", "2025-01-10T16:00:00")]
-        news = [_news("Gold rises sharply", date="2025-01-10 13:00")]
-        result = get_relevant_news_for_trades(trades, news, "UTC+2")
-        assert len(result) == 1
 
     def test_multiple_news_for_one_trade(self):
         """Two news items within window for the same trade."""
@@ -203,17 +196,17 @@ class TestGetRelevantNewsForTrades:
             _news("Gold rises sharply", date="2025-01-10 13:00"),
             _news("Gold demand increases", date="2025-01-10 13:30"),
         ]
-        result = get_relevant_news_for_trades(trades, news, "UTC+0")
+        result = get_relevant_news_for_trades(trades, news)
         assert len(result) == 1
         assert len(result[0]["relevant_news"]) == 2
 
     def test_empty_trades(self):
-        result = get_relevant_news_for_trades([], [_news("Gold")], "UTC+0")
+        result = get_relevant_news_for_trades([], [_news("Gold")])
         assert result == []
 
     def test_empty_news(self):
         result = get_relevant_news_for_trades(
-            [_trade("XAUUSD", "2025-01-10T14:00:00")], [], "UTC+0"
+            [_trade("XAUUSD", "2025-01-10T14:00:00")], [],
         )
         assert result == []
 
@@ -221,14 +214,14 @@ class TestGetRelevantNewsForTrades:
         """Trade at 14:00, news at 12:00 → exactly 2 hours → included."""
         trades = [_trade("XAUUSD", "2025-01-10T14:00:00")]
         news = [_news("Gold rises sharply", date="2025-01-10 12:00")]
-        result = get_relevant_news_for_trades(trades, news, "UTC+0")
+        result = get_relevant_news_for_trades(trades, news)
         assert len(result) == 1
 
     def test_direct_match_via(self):
         """Direct keyword match shows matched_via='direct'."""
         trades = [_trade("XAUUSD", "2025-01-10T14:00:00")]
         news = [_news("Gold price hits new high", date="2025-01-10 13:00")]
-        result = get_relevant_news_for_trades(trades, news, "UTC+0")
+        result = get_relevant_news_for_trades(trades, news)
         assert result[0]["relevant_news"][0]["matched_via"] == "direct"
 
 
@@ -261,7 +254,7 @@ class TestBuildNewsContextForCoaching:
                 date="2025-01-12 13:30",
             ),
         ]
-        ctx = build_news_context_for_coaching(trades, news, "UTC+0")
+        ctx = build_news_context_for_coaching(trades, news)
         assert "NEWS CONTEXT:" in ctx
         assert "XAUUSD" in ctx
         assert "EURUSD" in ctx
@@ -273,14 +266,14 @@ class TestBuildNewsContextForCoaching:
         assert "Do not assume direction" in ctx
 
     def test_empty_trades(self):
-        ctx = build_news_context_for_coaching([], [_news("Gold")], "UTC+0")
+        ctx = build_news_context_for_coaching([], [_news("Gold")])
         assert ctx == ""
 
     def test_no_matching_news(self):
         """Trades with no matching news → empty string."""
         trades = [_trade("XAUUSD", "2025-01-10T14:00:00")]
         news = [_news("Apple announces iPhone", date="2025-01-10 13:00")]
-        ctx = build_news_context_for_coaching(trades, news, "UTC+0")
+        ctx = build_news_context_for_coaching(trades, news)
         assert ctx == ""
 
     def test_wr_pnl_in_output(self):
@@ -294,7 +287,7 @@ class TestBuildNewsContextForCoaching:
             _news("Gold price surges", date="2025-01-10 13:00"),
             _news("Gold price continues rally", date="2025-01-10 14:00"),
         ]
-        ctx = build_news_context_for_coaching(trades, news, "UTC+0")
+        ctx = build_news_context_for_coaching(trades, news)
         # 2 trades with news, 1 without
         assert "Trades with nearby news: WR 50%" in ctx
         assert "Trades without news: WR 100%" in ctx
@@ -308,6 +301,6 @@ class TestBuildNewsContextForCoaching:
         news = [
             _news("Iran launches missiles at base", date="2025-01-10 13:00"),
         ]
-        ctx = build_news_context_for_coaching(trades, news, "UTC+0")
+        ctx = build_news_context_for_coaching(trades, news)
         assert "XAUUSD" in ctx
         assert "USOIL" in ctx

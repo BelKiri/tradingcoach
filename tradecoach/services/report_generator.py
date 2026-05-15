@@ -12,8 +12,13 @@ from datetime import datetime
 from typing import Any
 
 from tradecoach.services import trade_analyzer as ta
-from tradecoach.services._helpers import _is_loser, _is_winner, _net_profit, _to_dt
+from tradecoach.services._helpers import _is_loser, _is_winner, _net_profit
 from tradecoach.services.emotion_tracker import best_emotion, worst_emotion
+from tradecoach.services.tz_utils import (
+    DEFAULT_BROKER_TIMEZONE,
+    format_broker_date_range,
+    trade_instant_utc,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -26,20 +31,19 @@ def _fmt_pnl(value: float) -> str:
     return f"-${abs(value):,.2f}"
 
 
-def _date_range(trades: list[dict]) -> str:
-    dates = []
+def _date_range(trades: list[dict], broker_timezone: str | None = None) -> str:
+    bt = broker_timezone or DEFAULT_BROKER_TIMEZONE
+    dates_utc = []
     for t in trades:
-        dt = _to_dt(t.get("opened_at")) or _to_dt(t.get("closed_at"))
+        dt = trade_instant_utc(t.get("opened_at")) or trade_instant_utc(
+            t.get("closed_at")
+        )
         if dt:
-            dates.append(dt)
-    if not dates:
+            dates_utc.append(dt)
+    if not dates_utc:
         return "Unknown"
-    dates.sort()
-    first = dates[0].strftime("%b %d")
-    last = dates[-1].strftime("%b %d, %Y")
-    if dates[0].year != dates[-1].year:
-        first = dates[0].strftime("%b %d, %Y")
-    return f"{first} \u2014 {last}"
+    dates_utc.sort()
+    return format_broker_date_range(dates_utc[0], dates_utc[-1], bt)
 
 
 
@@ -48,8 +52,11 @@ def _date_range(trades: list[dict]) -> str:
 # ---------------------------------------------------------------------------
 
 def _section_overview(
-    trades: list[dict], account_balance: float | None = None,
+    trades: list[dict],
+    account_balance: float | None = None,
+    broker_timezone: str | None = None,
 ) -> list[str]:
+    bt = broker_timezone or DEFAULT_BROKER_TIMEZONE
     wr = ta.win_rate(trades)
     pnl = ta.total_pnl(trades)
     pf = ta.profit_factor(trades)
@@ -63,7 +70,7 @@ def _section_overview(
     lines = [
         "\U0001f4ca OVERVIEW",
         "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
-        f"\U0001f4c5 Period: {_date_range(trades)}",
+        f"\U0001f4c5 Period: {_date_range(trades, bt)}",
         f"\U0001f4c8 Total trades: {len(trades)} ({winners}W / {losers}L)",
         f"\U0001f3af Win rate: {wr:.1f}%",
         f"\U0001f4b0 Total P&L: {_fmt_pnl(pnl)}",
@@ -75,7 +82,10 @@ def _section_overview(
     return lines
 
 
-def _section_strengths(trades: list[dict]) -> list[str]:
+def _section_strengths(
+    trades: list[dict], broker_timezone: str | None = None,
+) -> list[str]:
+    bt = broker_timezone or DEFAULT_BROKER_TIMEZONE
     lines = [
         "",
         "\U0001f4aa STRENGTHS",
@@ -107,7 +117,7 @@ def _section_strengths(trades: list[dict]) -> list[str]:
                 f"({_fmt_pnl(d['pnl'])}, {d['win_rate']:.0f}% WR)"
             )
 
-    days = ta.pnl_by_day_of_week(trades)
+    days = ta.pnl_by_day_of_week(trades, broker_timezone=bt)
     if days:
         best_day = max(days.items(), key=lambda x: x[1]["pnl"])
         if best_day[1]["pnl"] > 0:
@@ -124,7 +134,10 @@ def _section_strengths(trades: list[dict]) -> list[str]:
     return lines
 
 
-def _section_weaknesses(trades: list[dict]) -> list[str]:
+def _section_weaknesses(
+    trades: list[dict], broker_timezone: str | None = None,
+) -> list[str]:
+    bt = broker_timezone or DEFAULT_BROKER_TIMEZONE
     lines = [
         "",
         "\u26a0\ufe0f WEAKNESSES",
@@ -161,7 +174,7 @@ def _section_weaknesses(trades: list[dict]) -> list[str]:
                 f"({_fmt_pnl(d['pnl'])}, {d['win_rate']:.0f}% WR)"
             )
 
-    days = ta.pnl_by_day_of_week(trades)
+    days = ta.pnl_by_day_of_week(trades, broker_timezone=bt)
     if days:
         worst_day = min(days.items(), key=lambda x: x[1]["pnl"])
         if worst_day[1]["pnl"] < 0:
@@ -178,8 +191,11 @@ def _section_weaknesses(trades: list[dict]) -> list[str]:
     return lines
 
 
-def _behavioral_trading_patterns(trades: list[dict]) -> list[str]:
+def _behavioral_trading_patterns(
+    trades: list[dict], broker_timezone: str | None = None,
+) -> list[str]:
     """Revenge, overtrading, martingale, quick exits, averaging down."""
+    bt = broker_timezone or DEFAULT_BROKER_TIMEZONE
     items: list[str] = []
 
     revenge = ta.detect_revenge_trades(trades)
@@ -200,7 +216,7 @@ def _behavioral_trading_patterns(trades: list[dict]) -> list[str]:
             )
         items.append(line)
 
-    ot = ta.detect_overtrading(trades)
+    ot = ta.detect_overtrading(trades, broker_timezone=bt)
     if ot["overtrading_days"] > 0 and ot["overtrading_wr"] is not None:
         ot_wr = ot["overtrading_wr"]
         normal_wr = ot["normal_wr"] or 0
@@ -227,7 +243,7 @@ def _behavioral_trading_patterns(trades: list[dict]) -> list[str]:
             f"({losers} losers, {_fmt_pnl(quick_pnl)})"
         )
 
-    weekend = ta.detect_weekend_holds(trades)
+    weekend = ta.detect_weekend_holds(trades, broker_timezone=bt)
     if weekend:
         w_pnl = sum(_net_profit(t) for t in weekend)
         items.append(
@@ -246,15 +262,18 @@ def _behavioral_trading_patterns(trades: list[dict]) -> list[str]:
     return items
 
 
-def _behavioral_timing(trades: list[dict]) -> list[str]:
+def _behavioral_timing(
+    trades: list[dict], broker_timezone: str | None = None,
+) -> list[str]:
     """Worst hours, sessions, and days."""
+    bt = broker_timezone or DEFAULT_BROKER_TIMEZONE
     items: list[str] = []
 
-    bad_hours = ta.worst_hours(trades)
+    bad_hours = ta.worst_hours(trades, broker_timezone=bt)
     if bad_hours:
         worst = bad_hours[0]
         items.append(
-            f"\u23f0 Worst hour: {worst['hour']:02d}:00 UTC "
+            f"\u23f0 Worst hour: {worst['hour']:02d}:00 broker-local "
             f"({_fmt_pnl(worst['pnl'])}, {worst['win_rate']:.0f}% WR, "
             f"{worst['trades']} trades)"
         )
@@ -268,7 +287,7 @@ def _behavioral_timing(trades: list[dict]) -> list[str]:
                 f"({data['win_rate']:.0f}% WR, {data['trades']} trades)"
             )
 
-    days = ta.pnl_by_day_of_week(trades)
+    days = ta.pnl_by_day_of_week(trades, broker_timezone=bt)
     for day, data in sorted(days.items(), key=lambda x: x[1]["pnl"]):
         if data["pnl"] < 0 and data["trades"] >= 3:
             items.append(
@@ -279,15 +298,18 @@ def _behavioral_timing(trades: list[dict]) -> list[str]:
     return items
 
 
-def _section_behavioral(trades: list[dict]) -> list[str]:
+def _section_behavioral(
+    trades: list[dict], broker_timezone: str | None = None,
+) -> list[str]:
+    bt = broker_timezone or DEFAULT_BROKER_TIMEZONE
     lines = [
         "",
         "\U0001f9e0 BEHAVIORAL ANALYSIS",
         "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
     ]
 
-    patterns = _behavioral_trading_patterns(trades)
-    timing = _behavioral_timing(trades)
+    patterns = _behavioral_trading_patterns(trades, broker_timezone=bt)
+    timing = _behavioral_timing(trades, broker_timezone=bt)
 
     lines.extend(patterns)
     lines.extend(timing)
@@ -375,6 +397,7 @@ def generate_full_report(
     emotions: list[dict] | None = None,
     *,
     account_balance: float | None = None,
+    broker_timezone: str | None = None,
 ) -> str:
     """Generate a complete analysis report formatted for Telegram.
 
@@ -392,11 +415,13 @@ def generate_full_report(
             "Upload a CSV or use /log to start tracking."
         )
 
+    bt = broker_timezone or DEFAULT_BROKER_TIMEZONE
+
     parts: list[str] = []
-    parts.extend(_section_overview(trades, account_balance))
-    parts.extend(_section_strengths(trades))
-    parts.extend(_section_weaknesses(trades))
-    parts.extend(_section_behavioral(trades))
+    parts.extend(_section_overview(trades, account_balance, broker_timezone=bt))
+    parts.extend(_section_strengths(trades, broker_timezone=bt))
+    parts.extend(_section_weaknesses(trades, broker_timezone=bt))
+    parts.extend(_section_behavioral(trades, broker_timezone=bt))
     parts.extend(_section_risk(trades, account_balance))
 
     # Emotion insights (if available)

@@ -223,18 +223,18 @@ class TestBuildCalendarSection:
                 {"date": "2025-01-13", "time_utc": "13:30",
                  "currency": "USD", "event_name": "CPI", "impact": "high"},
             ]
-            section = _build_calendar_section(trades, "UTC+2")
+            section = _build_calendar_section(trades)
         assert "ECONOMIC CALENDAR" in section
 
     def test_no_events(self):
         trades = _make_trades(10, winners=6)
         with patch("tradecoach.services.coaching.load_calendar") as mock_cal:
             mock_cal.return_value = []
-            section = _build_calendar_section(trades, "UTC+2")
+            section = _build_calendar_section(trades)
         assert "No high-impact events" in section
 
     def test_empty_trades(self):
-        section = _build_calendar_section([], "UTC+2")
+        section = _build_calendar_section([])
         assert section == ""
 
 

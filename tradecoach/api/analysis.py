@@ -19,12 +19,14 @@ from tradecoach.db.queries import (
     get_client,
     get_emotions,
     get_trades,
+    get_trades_today,
     get_user_settings,
     save_emotion,
 )
 from tradecoach.services.emotion_tracker import emotion_summary, stats_by_emotion
 from tradecoach.services.habit_scorer import calculate_habit_score
 from tradecoach.services.risk_checker import ChecklistResult, run_pre_trade_check
+from tradecoach.services.tz_utils import DEFAULT_BROKER_TIMEZONE
 
 router = APIRouter()
 
@@ -84,6 +86,7 @@ class EmotionStatsResponse(BaseModel):
 def get_emotion_analysis(
     user_id: str,
     since: date | None = Query(None),
+    broker_timezone: str | None = Query(None),
     auth_user: str = Depends(get_current_user),
 ):
     """Emotion correlation analysis."""
@@ -95,7 +98,10 @@ def get_emotion_analysis(
     emotions = get_emotions(client, user_id, since=since)
     emotion_dicts = [e.model_dump() for e in emotions]
 
-    result = emotion_summary(trade_dicts, emotion_dicts)
+    result = emotion_summary(
+        trade_dicts, emotion_dicts,
+        broker_timezone=broker_timezone or DEFAULT_BROKER_TIMEZONE,
+    )
 
     return EmotionStatsResponse(
         stats_by_emotion=result["stats_by_emotion"],
@@ -161,16 +167,20 @@ class RiskCheckResponse(BaseModel):
 
 
 @router.post("/{user_id}/risk-check", response_model=RiskCheckResponse)
-def pre_trade_risk_check(user_id: str, body: RiskCheckRequest, auth_user: str = Depends(get_current_user)):
+def pre_trade_risk_check(
+    user_id: str,
+    body: RiskCheckRequest,
+    broker_timezone: str | None = Query(None),
+    auth_user: str = Depends(get_current_user),
+):
     """Run pre-trade validation checklist."""
     require_self(auth_user, user_id)
     client = get_client()
     settings = get_user_settings(client, user_id)
     settings_dict = settings.model_dump() if settings else {}
 
-    today_trades = get_trades(
-        client, user_id,
-        since=date.today(),
+    today_trades = get_trades_today(
+        client, user_id, broker_timezone=broker_timezone,
     )
     today_dicts = [t.model_dump() for t in today_trades]
 

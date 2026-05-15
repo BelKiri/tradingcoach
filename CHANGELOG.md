@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `broker_timezone` sent when creating an account is now stored on the account record.
 
 ### Changed
+- Trade timestamps are now stored in UTC. Hour-of-day, weekday, overtrading, and equity-by-day analytics group trades using the account's broker timezone. Trading sessions (Asian, London, New York) use IANA timezone definitions with automatic daylight-saving handling.
 - Rebuilt economic calendar with USD high-impact events for 2025-2026 (added PPI, Retail Sales, ISM Services PMI)
 - Fixed DST handling: event times now reflect actual UTC per date
 - Asymmetric matching window: 30 min before event, 60 min after

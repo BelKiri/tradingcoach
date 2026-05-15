@@ -14,15 +14,21 @@ Emotions: calm, confident, fear, boredom, revenge
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime
-from typing import Any
+from datetime import datetime, timezone
 
 from tradecoach.services._helpers import (
     _is_winner,
     _net_profit,
-    _session_for_hour,
-    _to_dt,
 )
+from tradecoach.services.tz_utils import (
+    DEFAULT_BROKER_TIMEZONE,
+    broker_local_hour,
+    broker_local_weekday,
+    session_label_for_utc,
+    trade_instant_utc,
+)
+
+_EPOCH_EM = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
 # ---------------------------------------------------------------------------
@@ -170,7 +176,9 @@ def detect_emotional_streaks(
     """
     pairs = _join_trades_emotions(trades, emotions)
     # Sort by open time
-    pairs.sort(key=lambda p: _to_dt(p[0].get("opened_at")) or datetime.min)
+    pairs.sort(
+        key=lambda p: trade_instant_utc(p[0].get("opened_at")) or _EPOCH_EM,
+    )
 
     streaks: list[dict[str, Any]] = []
     if not pairs:
@@ -227,35 +235,30 @@ def emotion_by_symbol(
 
 
 def emotion_by_session(
-    trades: list[dict], emotions: list[dict]
+    trades: list[dict], emotions: list[dict],
 ) -> dict[str, dict[str, dict[str, Any]]]:
-    """Emotion distribution and win rate per trading session.
-
-    Returns {session: {emotion: {trades, win_rate, avg_pnl}}}.
-    """
+    """Emotion distribution per trading session (UTC IANA buckets)."""
     pairs = _join_trades_emotions(trades, emotions)
     groups: dict[str, dict[str, list[dict]]] = defaultdict(lambda: defaultdict(list))
     for trade, emotion in pairs:
-        dt = _to_dt(trade.get("opened_at"))
-        session = _session_for_hour(dt.hour) if dt else "Unknown"
+        dt_utc = trade_instant_utc(trade.get("opened_at"))
+        session = session_label_for_utc(dt_utc) if dt_utc else "Unknown"
         groups[session][emotion].append(trade)
 
     return _build_correlation_result(groups)
 
 
 def emotion_by_hour(
-    trades: list[dict], emotions: list[dict]
+    trades: list[dict], emotions: list[dict], broker_timezone: str | None = None,
 ) -> dict[int, dict[str, dict[str, Any]]]:
-    """Emotion distribution per hour of day.
-
-    Returns {hour: {emotion: {trades, win_rate, avg_pnl}}}.
-    """
+    """Emotion distribution per broker-local hour."""
+    bt = broker_timezone or DEFAULT_BROKER_TIMEZONE
     pairs = _join_trades_emotions(trades, emotions)
     groups: dict[int, dict[str, list[dict]]] = defaultdict(lambda: defaultdict(list))
     for trade, emotion in pairs:
-        dt = _to_dt(trade.get("opened_at"))
-        if dt:
-            groups[dt.hour][emotion].append(trade)
+        dt_utc = trade_instant_utc(trade.get("opened_at"))
+        if dt_utc:
+            groups[broker_local_hour(dt_utc, bt)][emotion].append(trade)
 
     result = {}
     for hour in sorted(groups.keys()):
@@ -264,20 +267,19 @@ def emotion_by_hour(
 
 
 def emotion_by_day_of_week(
-    trades: list[dict], emotions: list[dict]
+    trades: list[dict], emotions: list[dict], broker_timezone: str | None = None,
 ) -> dict[str, dict[str, dict[str, Any]]]:
-    """Emotion distribution per day of week.
-
-    Returns {day_name: {emotion: {trades, win_rate, avg_pnl}}}.
-    """
+    """Emotion distribution per broker-local weekday."""
+    bt = broker_timezone or DEFAULT_BROKER_TIMEZONE
     day_names = ["Monday", "Tuesday", "Wednesday", "Thursday",
                  "Friday", "Saturday", "Sunday"]
     pairs = _join_trades_emotions(trades, emotions)
     groups: dict[str, dict[str, list[dict]]] = defaultdict(lambda: defaultdict(list))
     for trade, emotion in pairs:
-        dt = _to_dt(trade.get("opened_at"))
-        if dt:
-            groups[day_names[dt.weekday()]][emotion].append(trade)
+        dt_utc = trade_instant_utc(trade.get("opened_at"))
+        if dt_utc:
+            wd = broker_local_weekday(dt_utc, bt)
+            groups[day_names[wd]][emotion].append(trade)
 
     return _build_correlation_result(groups)
 
@@ -311,9 +313,10 @@ def _summarize_emotion_group(
 # ---------------------------------------------------------------------------
 
 def emotion_summary(
-    trades: list[dict], emotions: list[dict]
+    trades: list[dict], emotions: list[dict], broker_timezone: str | None = None,
 ) -> dict[str, Any]:
     """Full emotion analysis in one call."""
+    bt = broker_timezone or DEFAULT_BROKER_TIMEZONE
     return {
         "stats_by_emotion": stats_by_emotion(trades, emotions),
         "best_emotion": best_emotion(trades, emotions),
@@ -321,6 +324,6 @@ def emotion_summary(
         "emotional_streaks": detect_emotional_streaks(trades, emotions),
         "by_symbol": emotion_by_symbol(trades, emotions),
         "by_session": emotion_by_session(trades, emotions),
-        "by_hour": emotion_by_hour(trades, emotions),
-        "by_day_of_week": emotion_by_day_of_week(trades, emotions),
+        "by_hour": emotion_by_hour(trades, emotions, broker_timezone=bt),
+        "by_day_of_week": emotion_by_day_of_week(trades, emotions, broker_timezone=bt),
     }

@@ -32,21 +32,14 @@ interface EquityCurveChartProps {
 
 export function EquityCurveChart({ data, startingBalance }: EquityCurveChartProps) {
   const chartData = useMemo(() => {
-    const seen = new Map<string, number>();
-    for (const pt of data.equity_curve) {
-      const closed = pt.closed_at as string | null;
-      if (!closed) continue;
-      const day = closed.slice(0, 10);
-      seen.set(day, startingBalance + (pt.equity as number));
-    }
-    return Array.from(seen.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, balance]) => ({
-        date: new Date(date + "T00:00:00").toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-        }),
-        balance: Math.round(balance * 100) / 100,
+    const pts = data.equity_curve
+      .map((pt) => pt as { day?: string; label?: string; equity?: number })
+      .filter((row) => row.day && row.equity !== undefined);
+    return pts
+      .sort((a, b) => (a.day as string).localeCompare(b.day as string))
+      .map((row) => ({
+        date: (row.label || row.day) as string,
+        balance: Math.round((startingBalance + (row.equity as number)) * 100) / 100,
       }));
   }, [data, startingBalance]);
 

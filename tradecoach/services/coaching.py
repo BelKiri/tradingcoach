@@ -8,11 +8,12 @@ Supports first-time analysis and repeat analysis with previous session compariso
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from tradecoach.services import trade_analyzer as ta
 from tradecoach.services._helpers import _net_profit, _to_dt
+from tradecoach.services.tz_utils import trade_instant_utc
 from tradecoach.utils.json_helpers import parse_json_field
 from tradecoach.services.calendar import (
     calculate_news_impact,
@@ -20,10 +21,11 @@ from tradecoach.services.calendar import (
 )
 from tradecoach.services.llm import LLMError, LLMUsage, deep_analysis
 from tradecoach.services.market_data import (
-    analyze_trader_volatility,
     build_volatility_context_for_coaching,
 )
 from tradecoach.services.news import build_news_context_for_coaching
+
+_EPOCH_COACH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
 # ===================================================================
@@ -209,20 +211,18 @@ def _build_behavioral_section(trades: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _build_calendar_section(
-    trades: list[dict], broker_timezone: str,
-) -> str:
+def _build_calendar_section(trades: list[dict]) -> str:
     """Section c) ECONOMIC CALENDAR IMPACT."""
     if not trades:
         return ""
 
-    dates = [_to_dt(t.get("opened_at")) for t in trades]
-    dates = [d for d in dates if d]
-    if not dates:
+    dates_utc = [trade_instant_utc(t.get("opened_at")) for t in trades]
+    dates_utc = [d for d in dates_utc if d]
+    if not dates_utc:
         return ""
 
-    date_from = min(dates).strftime("%Y-%m-%d")
-    date_to = max(dates).strftime("%Y-%m-%d")
+    date_from = min(dates_utc).astimezone(timezone.utc).strftime("%Y-%m-%d")
+    date_to = max(dates_utc).astimezone(timezone.utc).strftime("%Y-%m-%d")
 
     events = load_calendar(date_from=date_from, date_to=date_to, impact="high")
     if not events:
@@ -231,7 +231,6 @@ def _build_calendar_section(
     impact = calculate_news_impact(
         trades,
         events,
-        broker_timezone,
         window_before_minutes=30,
         window_after_minutes=60,
     )
@@ -268,14 +267,12 @@ def _build_calendar_section(
 
 def _build_volatility_section(
     trades: list[dict],
-    broker_timezone: str,
     news: list[dict[str, str]] | None = None,
     ohlc_by_symbol: dict[str, list[dict]] | None = None,
 ) -> str:
     """Section d) VOLATILITY ANALYSIS."""
     ctx = build_volatility_context_for_coaching(
         trades,
-        broker_timezone=broker_timezone,
         news=news,
         ohlc_by_symbol=ohlc_by_symbol,
     )
@@ -293,7 +290,7 @@ def _build_news_section(
     if not news:
         return "=== NEWS CONTEXT ===\nNo news data available for this period."
 
-    ctx = build_news_context_for_coaching(trades, news, broker_timezone)
+    ctx = build_news_context_for_coaching(trades, news)
     if ctx:
         return f"=== {ctx}"
     return "=== NEWS CONTEXT ===\nNo trades matched any news in this period."
@@ -311,7 +308,7 @@ def _build_trade_log(trades: list[dict]) -> str:
 
     sorted_trades = sorted(
         trades,
-        key=lambda t: _to_dt(t.get("opened_at")) or datetime.min,
+        key=lambda t: trade_instant_utc(t.get("opened_at")) or _EPOCH_COACH,
     )
     recent = sorted_trades[-50:]
 
@@ -362,8 +359,8 @@ def build_full_coaching_prompt(
     # Build all sections
     statistics = _build_statistics_section(trades, balance)
     behavioral = _build_behavioral_section(trades)
-    calendar = _build_calendar_section(trades, broker_tz)
-    volatility = _build_volatility_section(trades, broker_tz, news, ohlc_by_symbol)
+    calendar = _build_calendar_section(trades)
+    volatility = _build_volatility_section(trades, news, ohlc_by_symbol)
     news_section = _build_news_section(trades, news, broker_tz)
     trade_log = _build_trade_log(trades)
 
@@ -791,7 +788,7 @@ def _build_context(trades: list[dict], account_balance: float | None) -> str:
     # Trade log
     sorted_trades = sorted(
         trades,
-        key=lambda t: _to_dt(t.get("opened_at")) or datetime.min,
+        key=lambda t: trade_instant_utc(t.get("opened_at")) or _EPOCH_COACH,
     )
     recent = sorted_trades[-50:]
     lines.append(f"\n=== TRADE LOG (last {len(recent)} of {len(trades)}) ===")

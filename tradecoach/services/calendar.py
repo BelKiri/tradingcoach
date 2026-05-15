@@ -5,19 +5,17 @@ Economic calendar service — timezone conversion, event matching, news impact a
 from __future__ import annotations
 
 import json
-import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+from tradecoach.services.tz_utils import trade_instant_utc
+
+UTC = timezone.utc
 
 # Path to static calendar data
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _CALENDAR_FILE = _DATA_DIR / "economic_calendar.json"
-
-
-# ---------------------------------------------------------------------------
-# Load calendar
-# ---------------------------------------------------------------------------
 
 def load_calendar(
     date_from: str | None = None,
@@ -60,74 +58,30 @@ def fetch_calendar_forexfactory(
 
 
 # ---------------------------------------------------------------------------
-# Timezone conversion
-# ---------------------------------------------------------------------------
-
-def _parse_tz_offset(broker_timezone: str) -> int:
-    """Parse "UTC+N" or "UTC-N" string into offset hours.
-
-    Examples: "UTC+0" → 0, "UTC+2" → 2, "UTC-5" → -5.
-    """
-    m = re.match(r"UTC([+-]?\d+)", broker_timezone.strip())
-    if not m:
-        return 0
-    return int(m.group(1))
-
-
-def convert_trade_time_to_utc(
-    trade_opened_at: datetime | str, broker_timezone: str
-) -> datetime:
-    """Convert a trade timestamp from broker time to UTC.
-
-    Subtracts the broker UTC offset to get UTC.
-    Example: 15:30 in UTC+2 → 13:30 UTC.
-    """
-    if isinstance(trade_opened_at, str):
-        trade_opened_at = datetime.fromisoformat(trade_opened_at)
-
-    # Always work with naive datetimes (strip tzinfo from Supabase ISO strings)
-    if trade_opened_at.tzinfo is not None:
-        trade_opened_at = trade_opened_at.replace(tzinfo=None)
-
-    offset_hours = _parse_tz_offset(broker_timezone)
-    return trade_opened_at - timedelta(hours=offset_hours)
-
-
-# ---------------------------------------------------------------------------
-# Match trades to events
+# Match trades to events (trade times and events are true UTC)
 # ---------------------------------------------------------------------------
 
 def _event_dt(event: dict[str, str]) -> datetime:
-    """Build a UTC datetime from an event's date + time_utc."""
-    return datetime.fromisoformat(f"{event['date']}T{event['time_utc']}:00")
+    """Build a timezone-aware UTC datetime from an event's date + time_utc."""
+    d = datetime.fromisoformat(f"{event['date']}T{event['time_utc']}:00")
+    return d.replace(tzinfo=UTC)
 
 
 def match_trades_to_events(
     trades: list[dict],
     events: list[dict[str, str]],
-    broker_timezone: str = "UTC+2",
+    *,
     window_before_minutes: int = 30,
     window_after_minutes: int = 60,
 ) -> list[dict[str, Any]]:
-    """Match trades to nearby economic events.
+    """Match trades to nearby economic events (UTC vs UTC, no broker offset).
 
-    For each trade, find events where the trade open time (UTC) falls in an
-    asymmetric window around the event instant (UTC):
-
-        event_time - window_before_minutes <= trade_time <= event_time + window_after_minutes
-
-    Defaults: 30 minutes before the event, 60 minutes after (news window).
-
-    Each trade appears at most once in results.
-
-    Returns:
-        List of {trade, matched_events: [{event, minutes_offset}]}.
-        minutes_offset: negative = trade opened before event, positive = after.
+    For each trade, find events where the trade open instant (UTC) falls in an
+    asymmetric window around the event instant (UTC).
     """
     if not trades or not events:
         return []
 
-    # Pre-compute event datetimes
     event_dts = [(e, _event_dt(e)) for e in events]
     results: list[dict[str, Any]] = []
 
@@ -136,7 +90,9 @@ def match_trades_to_events(
         if not opened:
             continue
 
-        trade_utc = convert_trade_time_to_utc(opened, broker_timezone)
+        trade_utc = trade_instant_utc(opened)
+        if not trade_utc:
+            continue
         matched: list[dict[str, Any]] = []
 
         for event, evt_dt in event_dts:
@@ -163,7 +119,6 @@ def match_trades_to_events(
 def calculate_news_impact(
     trades: list[dict],
     events: list[dict[str, str]],
-    broker_timezone: str = "UTC+2",
     window_before_minutes: int = 30,
     window_after_minutes: int = 60,
 ) -> dict[str, Any]:
@@ -184,7 +139,6 @@ def calculate_news_impact(
     matched = match_trades_to_events(
         trades,
         events,
-        broker_timezone,
         window_before_minutes=window_before_minutes,
         window_after_minutes=window_after_minutes,
     )
