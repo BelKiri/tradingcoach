@@ -23,6 +23,7 @@ from tradecoach.db.queries import (
 from tradecoach.parsers.mt4_parser import MT4ParseError, parse_mt4_csv
 from tradecoach.parsers.xlsx_parser import XlsxParseError, parse_xlsx
 from tradecoach.services import trade_analyzer as ta
+from tradecoach.services.beta_quota import BetaQuotaError, assert_can_upload_file
 from tradecoach.services.tz_utils import DEFAULT_BROKER_TIMEZONE, naive_broker_wall_to_utc
 
 router = APIRouter()
@@ -99,6 +100,11 @@ def upload_file(
         raise HTTPException(422, "No trades found in file")
 
     client = get_client()
+    try:
+        assert_can_upload_file(client, user_id, account_id)
+    except BetaQuotaError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
     broker_tz = _broker_tz_for_upload(client, account_id)
 
     # Build TradeCreate objects

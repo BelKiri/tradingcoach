@@ -7,11 +7,21 @@ import { ChevronDown, Upload, Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/lib/hooks/useUser";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   requestCoaching,
   uploadTrades,
   type AccountSummary,
   type DashboardData,
+  type UserQuota,
 } from "@/lib/api";
+import {
+  AI_COACH_LIMIT_MESSAGE,
+  UPLOAD_LIMIT_MESSAGE,
+} from "@/lib/quota-messages";
 import { fetcher } from "@/lib/swr";
 import { fmtPnl } from "@/lib/format";
 
@@ -95,6 +105,8 @@ function DashboardHeader({
   uploadResult,
   onCoaching,
   coachingLoading,
+  uploadDisabled,
+  coachingDisabled,
 }: {
   totalTrades: number;
   period: PeriodKey;
@@ -107,6 +119,8 @@ function DashboardHeader({
   uploadResult: string | null;
   onCoaching: () => void;
   coachingLoading: boolean;
+  uploadDisabled: boolean;
+  coachingDisabled: boolean;
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
@@ -176,42 +190,69 @@ function DashboardHeader({
       </div>
 
       {/* Right side */}
-      <div className="flex items-center gap-3">
-        <label className="cursor-pointer">
-          <input
-            type="file"
-            accept=".csv,.txt,.xlsx,.xls"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) onUpload(f);
+      <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:gap-3">
+        {uploadDisabled ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="flex cursor-not-allowed items-center gap-2 rounded border border-[#262626] px-4 py-2 text-sm text-gray-500 opacity-60">
+                <Upload className="h-4 w-4" />
+                Upload file
+              </span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">{UPLOAD_LIMIT_MESSAGE}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <label className="cursor-pointer">
+            <input
+              type="file"
+              accept=".csv,.txt,.xlsx,.xls"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) onUpload(f);
+              }}
+            />
+            <span className="flex cursor-pointer items-center gap-2 rounded border border-[#262626] px-4 py-2 text-sm text-gray-300 transition-colors hover:border-[#3a3a3a] hover:text-white">
+              <Upload className="h-4 w-4" />
+              {uploading ? "Uploading..." : "Upload file"}
+            </span>
+          </label>
+        )}
+        {coachingDisabled ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                className="flex cursor-not-allowed items-center gap-2 rounded px-4 py-2 text-sm font-bold opacity-60"
+                style={{ backgroundColor: "var(--brand-gold, #d4a843)", color: "#000" }}
+              >
+                <Brain className="h-4 w-4" />
+                AI Coach
+              </span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">{AI_COACH_LIMIT_MESSAGE}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <button
+            onClick={onCoaching}
+            disabled={coachingLoading}
+            className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors ${
+              coachingLoading ? "cursor-not-allowed opacity-80" : ""
+            }`}
+            style={{
+              backgroundColor: "var(--brand-gold, #d4a843)",
+              color: "#000",
             }}
-          />
-          <span className="flex items-center gap-2 px-4 py-2 text-sm text-gray-300 border border-[#262626] rounded hover:border-[#3a3a3a] hover:text-white transition-colors cursor-pointer">
-            <Upload className="w-4 h-4" />
-            {uploading ? "Uploading..." : "Upload file"}
-          </span>
-        </label>
-        <button
-          onClick={onCoaching}
-          disabled={coachingLoading}
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded transition-colors ${
-            coachingLoading ? "opacity-80 cursor-not-allowed" : ""
-          }`}
-          style={{
-            backgroundColor: "var(--brand-gold, #d4a843)",
-            color: "#000",
-          }}
-          onMouseEnter={(e) => { if (!coachingLoading) e.currentTarget.style.backgroundColor = "#e0b84e"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "var(--brand-gold, #d4a843)"; }}
-        >
-          {coachingLoading ? (
-            <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <Brain className="w-4 h-4" />
-          )}
-          {coachingLoading ? "Analyzing..." : "AI Coach"}
-        </button>
+            onMouseEnter={(e) => { if (!coachingLoading) e.currentTarget.style.backgroundColor = "#e0b84e"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "var(--brand-gold, #d4a843)"; }}
+          >
+            {coachingLoading ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-black border-t-transparent" />
+            ) : (
+              <Brain className="h-4 w-4" />
+            )}
+            {coachingLoading ? "Analyzing..." : "AI Coach"}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -429,6 +470,20 @@ export default function DashboardPage() {
     { dedupingInterval: CACHE_TTL },
   );
   const { data: account } = useSWR<AccountSummary>(acctKey, fetcher);
+  const { data: quota } = useSWR<UserQuota>(
+    user ? `/api/users/${user.id}/quota` : null,
+    fetcher,
+  );
+
+  const accountQuota = quota?.accounts.find((a) => a.id === accountId);
+  const uploadDisabled =
+    Boolean(quota && !quota.is_beta_exempt && accountQuota?.upload_used);
+  const coachingDisabled =
+    Boolean(
+      quota &&
+        !quota.is_beta_exempt &&
+        (accountQuota?.coaching_used || quota.coaching_sessions_used >= 3),
+    );
 
   const loading = dashLoading && !data;
   const error = dashError?.message ?? "";
@@ -448,7 +503,10 @@ export default function DashboardPage() {
         setUploadResult(
           `${res.trades_saved} new trades saved (${res.trades_duplicate} duplicates skipped)`
         );
-        if (res.trades_saved > 0) setTimeout(forceReload, 1500);
+        if (res.trades_saved > 0) {
+          setTimeout(forceReload, 1500);
+          mutate((key: string) => typeof key === "string" && key.includes("/quota"));
+        }
       } catch {
         setUploadResult("Upload failed. Check file format.");
       }
@@ -464,6 +522,7 @@ export default function DashboardPage() {
     try {
       const res = await requestCoaching(user.id, accountId);
       mutate((key: string) => typeof key === "string" && key.includes("/api/coaching/sessions/"));
+      mutate((key: string) => typeof key === "string" && key.includes("/quota"));
       router.push(`/app/coaching/${res.session_id}`);
     } catch (e: unknown) {
       setCoachingError(
@@ -535,6 +594,8 @@ export default function DashboardPage() {
         uploadResult={uploadResult}
         onCoaching={handleCoaching}
         coachingLoading={coachingLoading}
+        uploadDisabled={uploadDisabled}
+        coachingDisabled={coachingDisabled}
       />
 
       {coachingError && (

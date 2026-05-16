@@ -42,6 +42,8 @@ class User(BaseModel):
     email: str | None = None
     tier: Literal["free", "pro"] = "free"
     timezone: str = "UTC"
+    is_beta_exempt: bool = False
+    coaching_sessions_used: int = 0
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

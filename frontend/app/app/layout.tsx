@@ -2,6 +2,7 @@
 
 import { SWRConfig } from "swr";
 import { AppNav } from "@/components/layout/app-nav";
+import { BetaQuotaBanner } from "@/components/layout/beta-quota-banner";
 import { swrConfig } from "@/lib/swr";
 
 export default function AppLayout({
@@ -12,7 +13,10 @@ export default function AppLayout({
   return (
     <SWRConfig value={swrConfig}>
       <AppNav />
-      <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>
+      <div className="mx-auto max-w-7xl px-4">
+        <BetaQuotaBanner />
+        <main className="py-6">{children}</main>
+      </div>
     </SWRConfig>
   );
 }

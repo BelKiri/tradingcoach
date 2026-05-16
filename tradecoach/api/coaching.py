@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from tradecoach.api.auth import get_current_user, require_self
 from tradecoach.db.queries import get_client
+from tradecoach.services.beta_quota import BetaQuotaError
 from tradecoach.services.coaching import get_ai_coaching
 from tradecoach.services.llm import LLMError
 from tradecoach.utils.json_helpers import parse_json_field
@@ -111,6 +112,9 @@ async def request_coaching(user_id: str, body: CoachingRequest, auth_user: str =
             period_from=period_from,
             period_to=period_to,
         )
+    except BetaQuotaError as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except LLMError as e:
         from fastapi.responses import JSONResponse
         logger.exception("LLMError while generating coaching for user_id=%s", user_id)

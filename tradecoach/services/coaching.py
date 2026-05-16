@@ -544,6 +544,15 @@ async def get_ai_coaching(
     if not trades:
         raise LLMError("No trades found for this account/period")
 
+    from tradecoach.services.beta_quota import (
+        BetaQuotaError,
+        assert_can_generate_coaching,
+        increment_coaching_sessions_used,
+        rollback_coaching_session,
+    )
+
+    assert_can_generate_coaching(client, user_id, account_id)
+
     # Fetch previous coaching session
     prev_session = _get_latest_coaching_session(client, user_id, account_id)
 
@@ -586,6 +595,11 @@ async def get_ai_coaching(
         new_trades_count=len(trades),
         model_used=usage.model,
     )
+
+    if not increment_coaching_sessions_used(client, user_id):
+        rollback_coaching_session(client, session_id)
+        from tradecoach.services.beta_quota import COACHING_LIFETIME_LIMIT_DETAIL
+        raise BetaQuotaError(COACHING_LIFETIME_LIMIT_DETAIL)
 
     return {
         "session_id": session_id,

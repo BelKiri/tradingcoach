@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from tradecoach.api.auth import get_current_user, require_self
 from tradecoach.db.models import UserCreate
 from tradecoach.db.queries import create_user, get_client, get_user
+from tradecoach.services.beta_quota import build_user_quota
 
 router = APIRouter()
 
@@ -17,6 +18,27 @@ router = APIRouter()
 class EnsureUserRequest(BaseModel):
     user_id: str
     email: str | None = None
+
+
+class AccountQuotaFlags(BaseModel):
+    id: str
+    upload_used: bool
+    coaching_used: bool
+
+
+class UserQuotaResponse(BaseModel):
+    is_beta_exempt: bool
+    coaching_sessions_used: int
+    accounts: list[AccountQuotaFlags]
+
+
+@router.get("/{user_id}/quota", response_model=UserQuotaResponse)
+def get_user_quota(user_id: str, auth_user: str = Depends(get_current_user)):
+    """Beta quota snapshot for banner and disabled UI states."""
+    require_self(auth_user, user_id)
+    client = get_client()
+    payload = build_user_quota(client, user_id)
+    return UserQuotaResponse(**payload)
 
 
 @router.post("/ensure")

@@ -21,6 +21,7 @@ from tradecoach.db.queries import (
     update_account_name,
 )
 from tradecoach.services import trade_analyzer as ta
+from tradecoach.services.beta_quota import BetaQuotaError, assert_can_create_account
 
 router = APIRouter()
 
@@ -93,6 +94,11 @@ def create_new_account(req: CreateAccountRequest, auth_user: str = Depends(get_c
     from tradecoach.db.models import UserCreate
     if not get_user(client, req.user_id):
         create_user(client, UserCreate(id=req.user_id))
+
+    try:
+        assert_can_create_account(client, req.user_id)
+    except BetaQuotaError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
     try:
         payload = dict(

@@ -14,7 +14,13 @@ import { Badge } from "@/components/ui/badge";
 import { AccountCardSkeleton } from "@/components/ui/skeleton";
 import { useUser } from "@/lib/hooks/useUser";
 import { fetcher } from "@/lib/swr";
-import type { AccountSummary } from "@/lib/api";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import type { AccountSummary, UserQuota } from "@/lib/api";
+import { ACCOUNT_LIMIT_TOOLTIP } from "@/lib/quota-messages";
 
 export default function AppHomePage() {
   const { user, loading: userLoading } = useUser();
@@ -23,8 +29,15 @@ export default function AppHomePage() {
     user ? `/api/accounts/${user.id}` : null,
     fetcher,
   );
+  const { data: quota } = useSWR<UserQuota>(
+    user ? `/api/users/${user.id}/quota` : null,
+    fetcher,
+  );
 
   const accounts = accountsData?.accounts ?? [];
+  const accountCount = quota?.accounts.length ?? accounts.length;
+  const atAccountLimit =
+    Boolean(quota && !quota.is_beta_exempt && accountCount >= 3);
 
   if ((userLoading || isLoading) && accounts.length === 0) {
     return (
@@ -54,9 +67,20 @@ export default function AppHomePage() {
               : "Get started by adding your first trading account."}
           </p>
         </div>
-        <Button asChild>
-          <Link href="/app/onboarding">+ Add Account</Link>
-        </Button>
+        {atAccountLimit ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button disabled>+ Add Account</Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">{ACCOUNT_LIMIT_TOOLTIP}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <Button asChild>
+            <Link href="/app/onboarding">+ Add Account</Link>
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -102,14 +126,28 @@ export default function AppHomePage() {
           </Link>
         ))}
 
-        <Link href="/app/onboarding">
-          <Card className="flex min-h-[180px] items-center justify-center border-dashed transition-colors hover:border-primary/30">
-            <div className="text-center text-muted-foreground">
-              <p className="text-3xl">+</p>
-              <p className="mt-2 text-sm font-medium">Add Account</p>
-            </div>
-          </Card>
-        </Link>
+        {atAccountLimit ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Card className="flex min-h-[180px] cursor-not-allowed items-center justify-center border-dashed opacity-60">
+                <div className="text-center text-muted-foreground">
+                  <p className="text-3xl">+</p>
+                  <p className="mt-2 text-sm font-medium">Add Account</p>
+                </div>
+              </Card>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">{ACCOUNT_LIMIT_TOOLTIP}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <Link href="/app/onboarding">
+            <Card className="flex min-h-[180px] items-center justify-center border-dashed transition-colors hover:border-primary/30">
+              <div className="text-center text-muted-foreground">
+                <p className="text-3xl">+</p>
+                <p className="mt-2 text-sm font-medium">Add Account</p>
+              </div>
+            </Card>
+          </Link>
+        )}
       </div>
     </div>
   );

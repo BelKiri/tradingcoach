@@ -14,6 +14,22 @@ export interface AccountSummary {
   win_rate: number | null;
 }
 
+export interface AccountQuotaFlags {
+  id: string;
+  upload_used: boolean;
+  coaching_used: boolean;
+}
+
+export interface UserQuota {
+  is_beta_exempt: boolean;
+  coaching_sessions_used: number;
+  accounts: AccountQuotaFlags[];
+}
+
+export async function fetchUserQuota(userId: string): Promise<UserQuota> {
+  return apiFetch<UserQuota>(`/api/users/${userId}/quota`);
+}
+
 export interface UploadResult {
   trades_parsed: number;
   trades_new: number;

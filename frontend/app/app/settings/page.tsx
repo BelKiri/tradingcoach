@@ -142,9 +142,8 @@ export default function SettingsPage() {
               You&apos;re on the <strong>Free</strong> plan.
             </p>
             <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-              <li>{"\u2713"} Unlimited uploads &amp; analytics</li>
-              <li>{"\u2713"} 1 AI coaching session per day</li>
-              <li>{"\u2713"} 3 trade checks per day</li>
+              <li>{"\u2713"} 1 file upload per account during beta</li>
+              <li>{"\u2713"} 1 AI Coach session per account, 3 across the beta</li>
             </ul>
           </div>
           <Button asChild>

@@ -435,6 +435,8 @@ class TestGetAiCoaching:
             patch("tradecoach.db.queries.get_trades", return_value=trade_models),
             patch("tradecoach.services.coaching._get_latest_coaching_session", return_value=None),
             patch("tradecoach.services.coaching._save_coaching_session", return_value="session-123"),
+            patch("tradecoach.services.beta_quota.assert_can_generate_coaching"),
+            patch("tradecoach.services.beta_quota.increment_coaching_sessions_used", return_value=True),
             patch("tradecoach.services.coaching.load_calendar", return_value=[]),
             patch("tradecoach.services.coaching.build_volatility_context_for_coaching", return_value=""),
         ):
@@ -473,6 +475,8 @@ class TestGetAiCoaching:
             patch("tradecoach.db.queries.get_trades", return_value=trade_models),
             patch("tradecoach.services.coaching._get_latest_coaching_session", return_value=prev_session),
             patch("tradecoach.services.coaching._save_coaching_session", return_value="session-456"),
+            patch("tradecoach.services.beta_quota.assert_can_generate_coaching"),
+            patch("tradecoach.services.beta_quota.increment_coaching_sessions_used", return_value=True),
             patch("tradecoach.services.coaching.load_calendar", return_value=[]),
             patch("tradecoach.services.coaching.build_volatility_context_for_coaching", return_value=""),
         ):

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Persistent banner showing remaining AI Coach sessions across the app.
+
 ### Planned
 - Cleanup of legacy LLM integration code
 - Auth flow idempotency improvement
@@ -19,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CSV files exported directly from the trading terminal now import correctly with timestamps preserved. Previously, CSVs with the raw broker-export column layout could result in trades that appeared in instrument totals but did not aggregate by day, hour, or trading session.
 
 ### Changed
+- Trading account creation is now limited to 3 accounts per user during the beta. Reach out at TG: @BMNCap for expanded access.
+- File uploads are limited to one per trading account during the beta. To upload a different file, delete the account and create a new one.
+- AI Coach is limited to one analysis per trading account during the beta, with a total of 3 across all accounts.
+- Settings page text now accurately reflects the active beta limits.
 - Trade timestamps are now stored in UTC. Hour-of-day, weekday, overtrading, and equity-by-day analytics group trades using the account's broker timezone. Trading sessions (Asian, London, New York) use IANA timezone definitions with automatic daylight-saving handling. Implements ADR-005.
 - Rebuilt economic calendar with USD high-impact events for 2025-2026 (added PPI, Retail Sales, ISM Services PMI)
 - Fixed DST handling: event times now reflect actual UTC per date
