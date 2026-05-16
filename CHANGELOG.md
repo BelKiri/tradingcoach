@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - HTTPS for backend endpoint
 
 ### Fixed
+- Uploading a CSV or XLSX that contains trades already in the account no longer creates duplicates. The import now correctly recognizes overlapping history and inserts only the new trades.
 - `broker_timezone` sent when creating an account is now stored on the account record.
 - Google login is now functional. The "Login with Google" option on the sign-in page completes authentication and returns the user signed in.
 - CSV files exported directly from the trading terminal now import correctly with timestamps preserved. Previously, CSVs with the raw broker-export column layout could result in trades that appeared in instrument totals but did not aggregate by day, hour, or trading session.

@@ -18,6 +18,7 @@ from tradecoach.db.queries import (
     get_client,
     get_trades,
     insert_trades,
+    trade_dedup_key,
 )
 from tradecoach.parsers.mt4_parser import MT4ParseError, parse_mt4_csv
 from tradecoach.parsers.xlsx_parser import XlsxParseError, parse_xlsx
@@ -61,19 +62,6 @@ def _parsed_row_times_to_utc(row: dict, broker_tz: str) -> dict:
             continue
         out[key] = naive_broker_wall_to_utc(dt_naive, broker_tz).replace(microsecond=0)
     return out
-
-
-def _dedup_key(t: dict) -> tuple:
-    """Build dedup key matching DB logic."""
-    from tradecoach.services._helpers import _to_dt
-    opened = _to_dt(t.get("opened_at"))
-    opened_min = opened.replace(second=0, microsecond=0) if opened else None
-    return (
-        t.get("symbol"),
-        str(opened_min) if opened_min else None,
-        t.get("direction"),
-        t.get("lot"),
-    )
 
 
 @router.post("/{user_id}", response_model=UploadResponse)
@@ -151,7 +139,7 @@ def upload_file(
     new_trades: list[TradeCreate] = []
     duplicates = 0
     for tc in trade_creates:
-        key = _dedup_key(tc.model_dump())
+        key = trade_dedup_key(tc.model_dump())
         if key in existing_keys:
             duplicates += 1
         else:

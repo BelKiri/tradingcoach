@@ -7,8 +7,10 @@ Functions accept a Supabase client as the first argument for testability.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
+
+UTC = timezone.utc
 
 from supabase import Client
 
@@ -237,6 +239,46 @@ def get_trades_today(
     return out
 
 
+def trade_dedup_key(row: dict[str, Any]) -> tuple[str, str | None, str, float]:
+    """Canonical dedup key: (symbol, opened_at_minute_utc_iso, direction, lot).
+
+    Used for both DB rows and incoming upload rows so incremental imports
+    skip trades already stored for the account.
+    """
+    return (
+        row.get("symbol") or "",
+        _dedup_opened_at_minute_utc(row.get("opened_at")),
+        row.get("direction") or "",
+        float(row.get("lot") or 0),
+    )
+
+
+def _dedup_opened_at_minute_utc(val: str | datetime | None) -> str | None:
+    """Normalize opened_at to UTC ISO string at minute precision."""
+    if val is None:
+        return None
+    dt: datetime | None
+    if isinstance(val, datetime):
+        dt = val
+    elif isinstance(val, str):
+        s = val.strip()
+        if not s:
+            return None
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        try:
+            dt = datetime.fromisoformat(s)
+        except (ValueError, TypeError):
+            return None
+    else:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    else:
+        dt = dt.astimezone(UTC)
+    return dt.replace(second=0, microsecond=0).isoformat()
+
+
 def find_existing_trade_keys(
     client: Client, user_id: str, *, account_id: str | None = None,
 ) -> set[tuple[str, str | None, str, float]]:
@@ -255,27 +297,7 @@ def find_existing_trade_keys(
     if account_id:
         query = query.eq("account_id", account_id)
     result = query.execute()
-    keys: set[tuple[str, str | None, str, float]] = set()
-    for r in result.data:
-        keys.add((
-            r.get("symbol", ""),
-            _round_to_minute(r.get("opened_at")),
-            r.get("direction", ""),
-            float(r.get("lot", 0)),
-        ))
-    return keys
-
-
-def _round_to_minute(iso_str: str | None) -> str | None:
-    """Round an ISO datetime string to the nearest minute."""
-    if not iso_str:
-        return None
-    try:
-        dt = datetime.fromisoformat(iso_str)
-        dt = dt.replace(second=0, microsecond=0)
-        return dt.isoformat()
-    except (ValueError, TypeError):
-        return iso_str
+    return {trade_dedup_key(r) for r in result.data}
 
 
 def delete_account_trades(client: Client, account_id: str) -> int:
