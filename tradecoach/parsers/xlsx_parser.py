@@ -15,55 +15,21 @@ from typing import Any
 
 import openpyxl
 
-# ---------------------------------------------------------------------------
-# Column aliases — fuzzy matching targets
-# ---------------------------------------------------------------------------
-_COLUMN_PATTERNS: list[tuple[str, list[str]]] = [
-    ("ticket", ["ticket", "order", "position", "deal", "order #"]),
-    ("open_time", ["open time", "opentime", "open date", "open"]),
-    ("close_time", ["close time", "closetime", "close date", "close"]),
-    ("symbol", ["symbol", "instrument", "item", "pair", "asset"]),
-    ("type", ["type", "direction", "action", "side"]),
-    ("lot", ["volume", "lot", "lots", "size", "quantity"]),
-    ("open_price", []),  # handled via dual-price logic
-    ("close_price", []),  # handled via dual-price logic
-    ("stop_loss", ["s / l", "s/l", "sl", "stop loss", "stoploss"]),
-    ("take_profit", ["t / p", "t/p", "tp", "take profit", "takeprofit"]),
-    ("commission", ["commission", "commissions", "comm"]),
-    ("swap", ["swap"]),
-    ("profit", ["profit", "p/l", "p&l", "net profit", "result", "net p/l"]),
-    ("pips", ["pips", "pip", "points"]),
-    ("duration", ["duration", "trade duration", "trade duration in seconds"]),
-]
-
-# Price column names — first occurrence = open, second = close
-_PRICE_NAMES = ["price", "rate"]
-
-_BUY_TYPES = {"buy", "long"}
-_SELL_TYPES = {"sell", "short"}
-
-_SKIP_TYPES = {
-    "balance", "credit", "deposit", "withdrawal",
-    "rebate", "bonus", "adjustment", "cancel",
-}
-
-_DATE_FORMATS = [
-    "%Y.%m.%d %H:%M:%S",
-    "%Y.%m.%d %H:%M",
-    "%Y-%m-%d %H:%M:%S",
-    "%Y-%m-%d %H:%M",
-    "%d.%m.%Y %H:%M:%S",
-    "%d.%m.%Y %H:%M",
-    "%d/%m/%Y %H:%M:%S",
-    "%d/%m/%Y %H:%M",
-    "%m/%d/%Y %H:%M:%S",
-    "%m/%d/%Y %H:%M",
-    "%Y.%m.%d",
-    "%Y-%m-%d",
-    "%d.%m.%Y",
-    "%d/%m/%Y",
-    "%m/%d/%Y",
-]
+from tradecoach.parsers._format_spec import (
+    ALIASES,
+    BUY_TYPES,
+    DATE_FORMATS,
+    EXCEL_NATIVE_DATETIME_SENTINEL,
+    PRICE_NAMES,
+    REQUIRED_CANONICAL_FIELDS,
+    SELL_TYPES,
+    SKIP_TYPES,
+    TIME_HEADER_DUPLICATE_LABEL,
+    has_mapped_time_column,
+    header_detection_keywords,
+    normalize_header_label,
+    primary_date_sample_column,
+)
 
 
 class XlsxParseError(Exception):
@@ -154,11 +120,7 @@ class _SkipRow(Exception):
 
 def _find_header_row(rows: list[list[Any]]) -> int | None:
     """Find the row index that contains column headers."""
-    # Collect all known keywords
-    all_keywords = set()
-    for _, aliases in _COLUMN_PATTERNS:
-        all_keywords.update(aliases)
-    all_keywords.update(_PRICE_NAMES)
+    all_keywords = header_detection_keywords()
 
     best_idx = None
     best_score = 0
@@ -176,23 +138,22 @@ def _find_header_row(rows: list[list[Any]]) -> int | None:
 
 
 def _map_columns(header: list[str]) -> dict[str, int]:
-    """Map canonical field names to column indices."""
+    """Map canonical field names to column indices (same rules as CSV parser)."""
     col_map: dict[str, int] = {}
-    normalized = [h.lower().strip() for h in header]
+    normalized = [normalize_header_label(raw) for raw in header]
+    price_syn = frozenset(PRICE_NAMES)
 
-    # Map known patterns
-    for canonical, aliases in _COLUMN_PATTERNS:
-        if not aliases:
+    for i, cell in enumerate(normalized):
+        if cell in price_syn:
             continue
-        for i, cell in enumerate(normalized):
-            if cell in aliases and canonical not in col_map:
+        if cell in ALIASES:
+            canonical = ALIASES[cell]
+            if canonical not in col_map:
                 col_map[canonical] = i
-                break
 
-    # Handle Price columns (may appear twice: open and close)
     price_indices: list[int] = []
     for i, cell in enumerate(normalized):
-        if cell in _PRICE_NAMES and i not in col_map.values():
+        if cell in PRICE_NAMES and i not in col_map.values():
             price_indices.append(i)
 
     if price_indices:
@@ -201,11 +162,9 @@ def _map_columns(header: list[str]) -> dict[str, int]:
         if len(price_indices) >= 2 and "close_price" not in col_map:
             col_map["close_price"] = price_indices[1]
 
-    # Handle dual Time columns: "Time" appearing twice (open, close)
-    # Check for "time" columns not yet mapped
     time_indices: list[int] = []
     for i, cell in enumerate(normalized):
-        if cell == "time" and i not in col_map.values():
+        if cell == TIME_HEADER_DUPLICATE_LABEL and i not in col_map.values():
             time_indices.append(i)
     if time_indices:
         if "open_time" not in col_map:
@@ -218,12 +177,17 @@ def _map_columns(header: list[str]) -> dict[str, int]:
 
 def _validate_columns(col_map: dict[str, int]) -> None:
     """Ensure minimum required columns are present."""
-    required = {"symbol", "type", "lot"}
-    missing = required - set(col_map.keys())
+    missing = REQUIRED_CANONICAL_FIELDS - set(col_map.keys())
     if missing:
         raise XlsxParseError(
             f"Missing required columns: {', '.join(sorted(missing))}. "
             f"Found: {', '.join(sorted(col_map.keys()))}"
+        )
+    if not has_mapped_time_column(col_map):
+        raise XlsxParseError(
+            "Missing a recognizable date/time column. Expected at least one "
+            "header such as Open Time, Close Time, Open, or Close, or two "
+            "columns named Time."
         )
 
 
@@ -231,7 +195,7 @@ def _detect_date_format(
     data_rows: list[list[Any]], col_map: dict[str, int],
 ) -> str | None:
     """Try to detect date format from sample rows."""
-    date_col = col_map.get("open_time") or col_map.get("close_time")
+    date_col = primary_date_sample_column(col_map)
     if date_col is None:
         return None
 
@@ -241,11 +205,11 @@ def _detect_date_format(
         val = row[date_col]
         # If openpyxl already parsed it as datetime, no format needed
         if isinstance(val, datetime):
-            return "__datetime__"
+            return EXCEL_NATIVE_DATETIME_SENTINEL
         val_str = str(val).strip()
         if not val_str:
             continue
-        for fmt in _DATE_FORMATS:
+        for fmt in DATE_FORMATS:
             try:
                 datetime.strptime(val_str, fmt)
                 return fmt
@@ -303,14 +267,14 @@ def _parse_datetime_value(value: Any, fmt: str | None) -> str | None:
     if not s:
         return None
 
-    if fmt and fmt != "__datetime__":
+    if fmt and fmt != EXCEL_NATIVE_DATETIME_SENTINEL:
         try:
             return datetime.strptime(s, fmt).isoformat()
         except ValueError:
             pass
 
     # Fallback: try all formats
-    for f in _DATE_FORMATS:
+    for f in DATE_FORMATS:
         try:
             return datetime.strptime(s, f).isoformat()
         except ValueError:
@@ -356,12 +320,12 @@ def _parse_row(
         raise _SkipRow()
     type_str = str(type_val).strip().lower()
 
-    if not type_str or any(skip in type_str for skip in _SKIP_TYPES):
+    if not type_str or any(skip in type_str for skip in SKIP_TYPES):
         raise _SkipRow()
 
-    if type_str in _BUY_TYPES or "buy" in type_str:
+    if type_str in BUY_TYPES or "buy" in type_str:
         direction = "buy"
-    elif type_str in _SELL_TYPES or "sell" in type_str:
+    elif type_str in SELL_TYPES or "sell" in type_str:
         direction = "sell"
     else:
         raise _SkipRow()

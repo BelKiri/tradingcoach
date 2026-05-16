@@ -16,99 +16,27 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-# ---------------------------------------------------------------------------
-# Column name aliases (broker variations → canonical name)
-# ---------------------------------------------------------------------------
-_ALIASES: dict[str, str] = {
-    # ticket
-    "ticket": "ticket",
-    "order": "ticket",
-    "order #": "ticket",
-    "deal": "ticket",
-    "position": "ticket",
-    # open time
-    "open time": "open_time",
-    "opentime": "open_time",
-    "open date": "open_time",
-    "time": "open_time",
-    # type / direction
-    "type": "type",
-    "action": "type",
-    # lot / volume
-    "size": "lot",
-    "lots": "lot",
-    "lot": "lot",
-    "volume": "lot",
-    # symbol
-    "item": "symbol",
-    "symbol": "symbol",
-    "instrument": "symbol",
-    "pair": "symbol",
-    # open price
-    "price": "open_price",
-    "open price": "open_price",
-    "openprice": "open_price",
-    # stop loss
-    "s/l": "stop_loss",
-    "sl": "stop_loss",
-    "stop loss": "stop_loss",
-    "stoploss": "stop_loss",
-    # take profit
-    "t/p": "take_profit",
-    "tp": "take_profit",
-    "take profit": "take_profit",
-    "takeprofit": "take_profit",
-    # close time
-    "close time": "close_time",
-    "closetime": "close_time",
-    "close date": "close_time",
-    # close price
-    "close price": "close_price",
-    "closeprice": "close_price",
-    # commission
-    "commission": "commission",
-    # taxes
-    "taxes": "taxes",
-    # swap
-    "swap": "swap",
-    # profit
-    "profit": "profit",
-    "net profit": "profit",
-    "p/l": "profit",
-    # comment (optional)
-    "comment": "comment",
-}
+from tradecoach.parsers._format_spec import (
+    ALIASES,
+    BUY_TYPES,
+    DATE_FORMATS,
+    PRICE_NAMES,
+    REQUIRED_CANONICAL_FIELDS,
+    SELL_TYPES,
+    SKIP_TYPES,
+    TIME_HEADER_DUPLICATE_LABEL,
+    has_mapped_time_column,
+    header_detection_keywords,
+    normalize_header_label,
+    primary_date_sample_column,
+)
 
 # Order in which "price" columns appear. The first is open, second is close.
 # This resolves ambiguity when both columns are just called "Price".
 _PRICE_OCCURRENCE = 0  # incremented per row during mapping
 
-# ---------------------------------------------------------------------------
-# Date format candidates (ordered by likelihood)
-# ---------------------------------------------------------------------------
-_DATE_FORMATS = [
-    "%Y.%m.%d %H:%M:%S",  # 2024.01.15 14:30:00  — MT4 default
-    "%Y.%m.%d %H:%M",     # 2024.01.15 14:30     — no seconds
-    "%Y-%m-%d %H:%M:%S",  # 2024-01-15 14:30:00  — ISO-ish
-    "%Y-%m-%d %H:%M",     # 2024-01-15 14:30
-    "%d.%m.%Y %H:%M:%S",  # 15.01.2024 14:30:00  — European
-    "%d.%m.%Y %H:%M",     # 15.01.2024 14:30
-    "%d/%m/%Y %H:%M:%S",  # 15/01/2024 14:30:00
-    "%d/%m/%Y %H:%M",     # 15/01/2024 14:30
-    "%m/%d/%Y %H:%M:%S",  # 01/15/2024 14:30:00  — US
-    "%m/%d/%Y %H:%M",     # 01/15/2024 14:30
-]
-
 # Trade types that represent actual market trades (not balance/credit ops)
-_BUY_TYPES = {"buy"}
-_SELL_TYPES = {"sell"}
-_TRADE_TYPES = _BUY_TYPES | _SELL_TYPES
-
-# Non-trade row type keywords to skip
-_SKIP_TYPES = {
-    "balance", "credit", "deposit", "withdrawal",
-    "rebate", "bonus", "adjustment", "cancel",
-}
+_TRADE_TYPES = BUY_TYPES | SELL_TYPES
 
 
 class MT4ParseError(Exception):
@@ -234,7 +162,7 @@ def _strip_html_and_headers(text: str) -> str:
                 continue
             # Also accept if the line has multiple known column names
             known_hits = sum(
-                1 for alias in _ALIASES if alias in low
+                1 for kw in header_detection_keywords() if kw in low
             )
             if known_hits >= 3:
                 header_found = True
@@ -285,42 +213,58 @@ def _read_csv(text: str, delimiter: str) -> list[list[str]]:
 def _map_columns(header: list[str]) -> dict[str, int]:
     """Map canonical field names to column indices.
 
-    Handles the case where "Price" appears twice (open and close).
+    Handles duplicate Price/Rate columns (open vs close) and duplicate Time
+    columns the same way as the Excel parser.
     """
     col_map: dict[str, int] = {}
-    price_indices: list[int] = []
+    normalized = [normalize_header_label(raw) for raw in header]
+    price_syn = frozenset(PRICE_NAMES)
 
-    for i, raw in enumerate(header):
-        normalized = raw.strip().lower()
-        if normalized in _ALIASES:
-            canonical = _ALIASES[normalized]
-            if canonical == "open_price" and normalized == "price":
-                # "Price" can appear twice — collect indices
-                price_indices.append(i)
-            elif canonical not in col_map:
+    for i, cell in enumerate(normalized):
+        if cell in price_syn:
+            continue
+        if cell in ALIASES:
+            canonical = ALIASES[cell]
+            if canonical not in col_map:
                 col_map[canonical] = i
-            elif canonical == "open_price":
-                # Second explicit "open price" is weird, keep first
-                pass
 
-    # Handle dual "Price" columns
+    price_indices: list[int] = []
+    for i, cell in enumerate(normalized):
+        if cell in PRICE_NAMES and i not in col_map.values():
+            price_indices.append(i)
+
     if price_indices:
         if "open_price" not in col_map:
             col_map["open_price"] = price_indices[0]
         if len(price_indices) >= 2 and "close_price" not in col_map:
             col_map["close_price"] = price_indices[1]
 
+    time_indices: list[int] = []
+    for i, cell in enumerate(normalized):
+        if cell == TIME_HEADER_DUPLICATE_LABEL and i not in col_map.values():
+            time_indices.append(i)
+    if time_indices:
+        if "open_time" not in col_map:
+            col_map["open_time"] = time_indices[0]
+        if len(time_indices) >= 2 and "close_time" not in col_map:
+            col_map["close_time"] = time_indices[1]
+
     return col_map
 
 
 def _validate_columns(col_map: dict[str, int]) -> None:
     """Ensure minimum required columns are present."""
-    required = {"symbol", "type", "lot", "profit"}
-    missing = required - set(col_map.keys())
+    missing = REQUIRED_CANONICAL_FIELDS - set(col_map.keys())
     if missing:
         raise MT4ParseError(
             f"Missing required columns: {', '.join(sorted(missing))}. "
             f"Found: {', '.join(sorted(col_map.keys()))}"
+        )
+    if not has_mapped_time_column(col_map):
+        raise MT4ParseError(
+            "Missing a recognizable date/time column. Expected at least one "
+            "header such as Open Time, Close Time, Open, or Close, or two "
+            "columns named Time."
         )
 
 
@@ -328,7 +272,7 @@ def _detect_date_format(
     data_rows: list[list[str]], col_map: dict[str, int]
 ) -> str | None:
     """Try to detect the date format from sample rows."""
-    date_col = col_map.get("open_time")
+    date_col = primary_date_sample_column(col_map)
     if date_col is None:
         return None
 
@@ -338,7 +282,7 @@ def _detect_date_format(
         val = row[date_col].strip()
         if not val:
             continue
-        for fmt in _DATE_FORMATS:
+        for fmt in DATE_FORMATS:
             try:
                 datetime.strptime(val, fmt)
                 return fmt
@@ -385,7 +329,7 @@ def _parse_datetime(value: str, fmt: str | None) -> str | None:
             pass
 
     # Fallback: try all formats
-    for f in _DATE_FORMATS:
+    for f in DATE_FORMATS:
         try:
             dt = datetime.strptime(value, f)
             return dt.isoformat()
@@ -413,13 +357,13 @@ def _parse_row(
     trade_type = _get(row, col_map, "type").lower()
 
     # Skip non-trade rows
-    if not trade_type or any(skip in trade_type for skip in _SKIP_TYPES):
+    if not trade_type or any(skip in trade_type for skip in SKIP_TYPES):
         raise _SkipRow()
 
     # Determine direction
-    if trade_type in _BUY_TYPES or "buy" in trade_type:
+    if trade_type in BUY_TYPES or "buy" in trade_type:
         direction = "buy"
-    elif trade_type in _SELL_TYPES or "sell" in trade_type:
+    elif trade_type in SELL_TYPES or "sell" in trade_type:
         direction = "sell"
     else:
         raise _SkipRow()
@@ -460,8 +404,11 @@ def _parse_row(
     ticket_str = _get(row, col_map, "ticket")
     ticket = int(ticket_str) if ticket_str.isdigit() else None
 
-    # Pips calculation (if we have both prices and a known FX pair)
-    profit_pips = _calc_pips(symbol, direction, open_price, close_price)
+    pips_from_file = _parse_decimal(_get(row, col_map, "pips"))
+    profit_pips = (
+        float(pips_from_file) if pips_from_file is not None
+        else _calc_pips(symbol, direction, open_price, close_price)
+    )
 
     return {
         "ticket": ticket,

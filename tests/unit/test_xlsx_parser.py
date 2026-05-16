@@ -170,11 +170,15 @@ class TestMapColumns:
 
 class TestValidateColumns:
     def test_valid(self):
-        _validate_columns({"symbol": 0, "type": 1, "lot": 2})
+        _validate_columns({"symbol": 0, "type": 1, "lot": 2, "open_time": 3})
 
     def test_missing(self):
         with pytest.raises(XlsxParseError, match="Missing required"):
             _validate_columns({"symbol": 0})
+
+    def test_missing_time_column(self):
+        with pytest.raises(XlsxParseError, match="date/time column"):
+            _validate_columns({"symbol": 0, "type": 1, "lot": 2})
 
 
 # ===================================================================
@@ -233,11 +237,11 @@ class TestParseXlsx:
 
     def test_summary_rows_skipped(self):
         rows = [
-            ["Ticket", "Symbol", "Type", "Volume", "Profit"],
-            [1, "EURUSD", "buy", 0.1, 30.0],
-            [2, "GBPUSD", "sell", 0.2, -10.0],
-            [None, None, "Total:", None, 20.0],  # summary row — no symbol
-            [None, "Average:", None, None, 10.0],  # no valid type
+            ["Ticket", "Open Time", "Symbol", "Type", "Volume", "Profit"],
+            [1, "2024-01-01 10:00:00", "EURUSD", "buy", 0.1, 30.0],
+            [2, "2024-01-02 11:00:00", "GBPUSD", "sell", 0.2, -10.0],
+            [None, None, "Total:", None, None, 20.0],  # summary row — no symbol
+            [None, None, "Average:", None, None, 10.0],  # no valid type
         ]
         xlsx = _make_xlsx(rows)
         trades = parse_xlsx(xlsx)
@@ -245,10 +249,10 @@ class TestParseXlsx:
 
     def test_balance_rows_skipped(self):
         rows = [
-            ["Ticket", "Symbol", "Type", "Volume", "Profit"],
-            [1, "EURUSD", "buy", 0.1, 30.0],
-            [None, None, "balance", 0, 5000.0],
-            [None, None, "deposit", 0, 1000.0],
+            ["Ticket", "Open Time", "Symbol", "Type", "Volume", "Profit"],
+            [1, "2024-01-01 10:00:00", "EURUSD", "buy", 0.1, 30.0],
+            [None, None, None, "balance", 0, 5000.0],
+            [None, None, None, "deposit", 0, 1000.0],
         ]
         xlsx = _make_xlsx(rows)
         trades = parse_xlsx(xlsx)
@@ -256,10 +260,10 @@ class TestParseXlsx:
 
     def test_symbol_suffix_stripped(self):
         rows = [
-            ["Ticket", "Symbol", "Type", "Volume", "Profit"],
-            [1, "USOIL.cash", "buy", 1.0, 50.0],
-            [2, "EURUSDm", "sell", 0.1, -10.0],
-            [3, "GBPUSD.ecn", "buy", 0.2, 20.0],
+            ["Ticket", "Open Time", "Symbol", "Type", "Volume", "Profit"],
+            [1, "2024-01-01", "USOIL.cash", "buy", 1.0, 50.0],
+            [2, "2024-01-02", "EURUSDm", "sell", 0.1, -10.0],
+            [3, "2024-01-03", "GBPUSD.ecn", "buy", 0.2, 20.0],
         ]
         xlsx = _make_xlsx(rows)
         trades = parse_xlsx(xlsx)
@@ -269,8 +273,8 @@ class TestParseXlsx:
 
     def test_pips_from_file(self):
         rows = [
-            ["Ticket", "Symbol", "Type", "Volume", "Profit", "Pips"],
-            [1, "XAUUSD", "buy", 0.1, 50.0, 5.0],
+            ["Ticket", "Open Time", "Symbol", "Type", "Volume", "Profit", "Pips"],
+            [1, "2024-01-01 10:00:00", "XAUUSD", "buy", 0.1, 50.0, 5.0],
         ]
         xlsx = _make_xlsx(rows)
         trades = parse_xlsx(xlsx)
@@ -278,8 +282,8 @@ class TestParseXlsx:
 
     def test_pips_calculated_when_not_in_file(self):
         rows = [
-            ["Ticket", "Symbol", "Type", "Volume", "Price", "Price", "Profit"],
-            [1, "EURUSD", "buy", 0.1, 1.095, 1.098, 30.0],
+            ["Ticket", "Open", "Symbol", "Type", "Volume", "Price", "Price", "Profit"],
+            [1, "2024-01-01 10:00:00", "EURUSD", "buy", 0.1, 1.095, 1.098, 30.0],
         ]
         xlsx = _make_xlsx(rows)
         trades = parse_xlsx(xlsx)
@@ -299,8 +303,8 @@ class TestParseXlsx:
 
     def test_zero_sl_tp_treated_as_none(self):
         rows = [
-            ["Ticket", "Symbol", "Type", "Volume", "SL", "TP", "Profit"],
-            [1, "EURUSD", "buy", 0.1, 0.0, 0.0, 30.0],
+            ["Ticket", "Open Time", "Symbol", "Type", "Volume", "SL", "TP", "Profit"],
+            [1, "2024-01-01 10:00:00", "EURUSD", "buy", 0.1, 0.0, 0.0, 30.0],
         ]
         xlsx = _make_xlsx(rows)
         trades = parse_xlsx(xlsx)
@@ -339,8 +343,8 @@ class TestParseXlsx:
     def test_lot_as_string(self):
         """Some brokers store Volume as string like '0.03'."""
         rows = [
-            ["Ticket", "Symbol", "Type", "Volume", "Profit"],
-            [1, "EURUSD", "buy", "0.03", 10.0],
+            ["Ticket", "Open Time", "Symbol", "Type", "Volume", "Profit"],
+            [1, "2024-01-01 10:00:00", "EURUSD", "buy", "0.03", 10.0],
         ]
         xlsx = _make_xlsx(rows)
         trades = parse_xlsx(xlsx)
