@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { CoachingSession, AccountSummary } from "@/lib/api";
+import { CoachMarkdown } from "@/lib/coach-markdown";
 import { fetcher } from "@/lib/swr";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -23,73 +24,6 @@ const verdictConfig: Record<
   setback: { icon: "\uD83D\uDC4E", label: "Needs work", variant: "destructive" },
   no_change: { icon: "\u27A1\uFE0F", label: "No change", variant: "warning" },
 };
-
-/** Render AI response text with basic markdown-like formatting. */
-function FormattedResponse({ text }: { text: string }) {
-  // Split by double newline into paragraphs
-  const blocks = text.split(/\n\n+/);
-
-  return (
-    <div className="space-y-4">
-      {blocks.map((block, i) => {
-        const trimmed = block.trim();
-        if (!trimmed) return null;
-
-        // Bold headings: **TEXT**
-        const lines = trimmed.split("\n").map((line, j) => {
-          // Replace **bold** with styled spans
-          let formatted = line.replace(
-            /\*\*(.+?)\*\*/g,
-            '<strong class="text-foreground font-semibold">$1</strong>',
-          );
-          // Highlight $ amounts: positive green, negative red
-          formatted = formatted.replace(
-            /\$[\+]?[\d,]+(?:\.\d+)?(?:\/month)?/g,
-            (match) => {
-              const isNeg = match.includes("-");
-              const cls = isNeg ? "text-red-400 font-medium" : "text-emerald-400 font-medium";
-              return `<span class="${cls}">${match}</span>`;
-            },
-          );
-          formatted = formatted.replace(
-            /-\$[\d,]+(?:\.\d+)?(?:\/month)?/g,
-            (match) => `<span class="text-red-400 font-medium">${match}</span>`,
-          );
-          return (
-            <span
-              key={j}
-              dangerouslySetInnerHTML={{ __html: formatted }}
-            />
-          );
-        });
-
-        // Numbered items (1. 2. 3.)
-        if (/^\d+\.\s/.test(trimmed)) {
-          return (
-            <div key={i} className="text-sm leading-relaxed">
-              {lines.map((l, j) => (
-                <p key={j} className="mb-1">
-                  {l}
-                </p>
-              ))}
-            </div>
-          );
-        }
-
-        return (
-          <p key={i} className="text-sm leading-relaxed">
-            {lines.map((l, j) => (
-              <span key={j}>
-                {j > 0 && <br />}
-                {l}
-              </span>
-            ))}
-          </p>
-        );
-      })}
-    </div>
-  );
-}
 
 export default function CoachingSessionPage() {
   const params = useParams();
@@ -253,7 +187,7 @@ export default function CoachingSessionPage() {
           <CardTitle className="text-lg">AI Analysis</CardTitle>
         </CardHeader>
         <CardContent>
-          <FormattedResponse text={session.ai_response} />
+          <CoachMarkdown text={session.ai_response} />
         </CardContent>
       </Card>
 

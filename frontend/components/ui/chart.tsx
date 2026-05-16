@@ -80,8 +80,11 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
   }
 
   return (
-    <style
-      dangerouslySetInnerHTML={{
+    <>
+      {/* Safe path: CSS variables only. `config` keys/colors come from static chartConfig
+          objects at call sites (e.g. equity-curve-chart, trades-by-instrument-chart), not AI/user HTML. */}
+      <style
+        dangerouslySetInnerHTML={{
         __html: Object.entries(THEMES)
           .map(
             ([theme, prefix]) => `
@@ -100,6 +103,7 @@ ${colorConfig
           .join('\n'),
       }}
     />
+    </>
   )
 }
 
