@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `broker_timezone` sent when creating an account is now stored on the account record.
+- Google login is now functional. The "Login with Google" option on the sign-in page completes authentication and returns the user signed in.
+- CSV files exported directly from the trading terminal now import correctly with timestamps preserved. Previously, CSVs with the raw broker-export column layout could result in trades that appeared in instrument totals but did not aggregate by day, hour, or trading session.
 
 ### Changed
 - Trade timestamps are now stored in UTC. Hour-of-day, weekday, overtrading, and equity-by-day analytics group trades using the account's broker timezone. Trading sessions (Asian, London, New York) use IANA timezone definitions with automatic daylight-saving handling. Implements ADR-005.
