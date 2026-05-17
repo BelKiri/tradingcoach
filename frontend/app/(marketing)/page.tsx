@@ -320,11 +320,7 @@ function FAQ() {
     },
     {
       q: "How does the AI coaching work?",
-      a: "Our AI analyzes your last 50 trades, cross-references timestamps, lot sizes, P&L, and behavioral patterns. It finds the ONE most surprising insight you haven\u2019t noticed \u2014 like \u2018You only revenge trade after gold losses\u2019 \u2014 and gives a specific action with exact dollar savings.",
-    },
-    {
-      q: "Can I use this for crypto trading?",
-      a: "Yes. TradingCoach works for both forex and crypto traders. Import trades from Binance, Bybit, OKX via CSV/Excel now, or auto-sync via API (Pro plan).",
+      a: "Our AI analyzes your trades by cross-referencing timestamps, lot sizes, P&L, and behavioral patterns. It surfaces the most surprising insights you may have missed and suggests practical ways to improve your trading strategy.",
     },
     {
       q: "Do I need to connect my broker?",
@@ -396,6 +392,8 @@ function FinalCTA() {
 }
 
 /* ---------- Page ---------- */
+const SHOW_PRICING_ON_LANDING = false;
+
 export default function LandingPage() {
   return (
     <>
@@ -403,7 +401,7 @@ export default function LandingPage() {
       <SocialProof />
       <HowItWorks />
       <WhatWeDetect />
-      <PricingPreview />
+      {SHOW_PRICING_ON_LANDING && <PricingPreview />}
       <FinalCTA />
       <FAQ />
     </>
