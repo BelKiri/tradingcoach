@@ -57,6 +57,8 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:3001",
         "https://tradeguard-cyan.vercel.app",
+        "https://trading-coach.app",
+        "https://www.trading-coach.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],

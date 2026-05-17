@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CSV files exported directly from the trading terminal now import correctly with timestamps preserved. Previously, CSVs with the raw broker-export column layout could result in trades that appeared in instrument totals but did not aggregate by day, hour, or trading session.
 
 ### Changed
+- Frontend is now served on the canonical domain trading-coach.app; the legacy URL remains available during the transition.
 - Trading account creation is now limited to 3 accounts per user during the beta. Reach out at TG: @BMNCap for expanded access.
 - File uploads are limited to one per trading account during the beta. To upload a different file, delete the account and create a new one.
 - AI Coach is limited to one analysis per trading account during the beta, with a total of 3 across all accounts.
