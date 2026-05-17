@@ -13,7 +13,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned
 - Cleanup of legacy LLM integration code
 - Auth flow idempotency improvement
-- HTTPS for backend endpoint
 
 ### Fixed
 - Uploading a CSV or XLSX that contains trades already in the account no longer creates duplicates. The import now correctly recognizes overlapping history and inserts only the new trades.
@@ -34,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 - AI Coach output is now rendered through a safe markdown parser. Hardens the rendering layer against unsafe HTML in model output.
+- Backend API is now served over HTTPS for all production traffic from the frontend proxy.
 
 ## [0.1.0] — 2026-05-12
 
