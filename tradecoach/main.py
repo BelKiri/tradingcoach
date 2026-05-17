@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="TradeCoach API",
+    title="TradingCoach API",
     version="0.1.0",
     description="AI trading coach for retail FX traders",
     lifespan=lifespan,
