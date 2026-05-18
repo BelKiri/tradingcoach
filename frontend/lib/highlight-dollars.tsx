@@ -1,11 +1,16 @@
 import * as React from "react";
 
-/**
- * Matches dollar PNL amounts only (e.g. -$1,234.56, ~$200/week).
- * Does not match trade counts, percentages, or bare numbers.
- */
-const DOLLAR_HIGHLIGHT_RE =
-  /(-\$[\d,]+(?:\.\d+)?(?:\/(?:month|week))?)|((?:~)?\$[\+]?[\d,]+(?:\.\d+)?(?:\/(?:month|week))?)/g;
+/** Signed dollar PNL only; unsigned `$N` stays default text color. */
+const SIGNED_DOLLAR_AMOUNT =
+  String.raw`[\d,]+(?:\.\d+)?(?:\/(?:month|week))?`;
+
+const DOLLAR_HIGHLIGHT_RE = new RegExp(
+  String.raw`(-\$${SIGNED_DOLLAR_AMOUNT})` +
+    String.raw`|(\+\$${SIGNED_DOLLAR_AMOUNT})` +
+    String.raw`|(\$-${SIGNED_DOLLAR_AMOUNT})` +
+    String.raw`|(\$\+${SIGNED_DOLLAR_AMOUNT})`,
+  "g",
+);
 
 export function highlightDollarsInPlainText(text: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
@@ -18,7 +23,7 @@ export function highlightDollarsInPlainText(text: string): React.ReactNode {
       parts.push(text.slice(last, m.index));
     }
     const full = m[0];
-    const isNeg = m[1] != null || full.includes("-");
+    const isNeg = m[1] != null || m[3] != null;
     parts.push(
       <span
         key={`pnl-$-${k++}`}
