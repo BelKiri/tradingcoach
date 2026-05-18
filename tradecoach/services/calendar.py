@@ -121,6 +121,8 @@ def calculate_news_impact(
     events: list[dict[str, str]],
     window_before_minutes: int = 30,
     window_after_minutes: int = 60,
+    *,
+    matched: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Analyze the impact of news events on trading performance.
 
@@ -136,12 +138,13 @@ def calculate_news_impact(
     """
     from tradecoach.services._helpers import _net_profit
 
-    matched = match_trades_to_events(
-        trades,
-        events,
-        window_before_minutes=window_before_minutes,
-        window_after_minutes=window_after_minutes,
-    )
+    if matched is None:
+        matched = match_trades_to_events(
+            trades,
+            events,
+            window_before_minutes=window_before_minutes,
+            window_after_minutes=window_after_minutes,
+        )
 
     # Build set of trade indices that are news trades
     news_trade_ids: set[int] = set()

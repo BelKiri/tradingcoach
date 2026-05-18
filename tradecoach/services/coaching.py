@@ -18,6 +18,7 @@ from tradecoach.utils.json_helpers import parse_json_field
 from tradecoach.services.calendar import (
     calculate_news_impact,
     load_calendar,
+    match_trades_to_events,
 )
 from tradecoach.services.llm import LLMError, LLMUsage, deep_analysis
 from tradecoach.services.market_data import (
@@ -211,28 +212,44 @@ def _build_behavioral_section(trades: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _build_calendar_section(trades: list[dict]) -> str:
-    """Section c) ECONOMIC CALENDAR IMPACT."""
+def _calendar_event_sort_key(event: dict[str, str]) -> str:
+    return f"{event['date']}T{event['time_utc']}"
+
+
+def _build_calendar_section(
+    trades: list[dict],
+) -> tuple[str, list[dict[str, Any]]]:
+    """Section c) ECONOMIC CALENDAR IMPACT and per-trade event matches."""
     if not trades:
-        return ""
+        return "", []
 
     dates_utc = [trade_instant_utc(t.get("opened_at")) for t in trades]
     dates_utc = [d for d in dates_utc if d]
     if not dates_utc:
-        return ""
+        return "", []
 
     date_from = min(dates_utc).astimezone(timezone.utc).strftime("%Y-%m-%d")
     date_to = max(dates_utc).astimezone(timezone.utc).strftime("%Y-%m-%d")
 
     events = load_calendar(date_from=date_from, date_to=date_to, impact="high")
     if not events:
-        return "=== ECONOMIC CALENDAR IMPACT ===\nNo high-impact events in this period."
+        return (
+            "=== ECONOMIC CALENDAR IMPACT ===\nNo high-impact events in this period.",
+            [],
+        )
 
+    matched = match_trades_to_events(
+        trades,
+        events,
+        window_before_minutes=30,
+        window_after_minutes=60,
+    )
     impact = calculate_news_impact(
         trades,
         events,
         window_before_minutes=30,
         window_after_minutes=60,
+        matched=matched,
     )
 
     lines: list[str] = ["=== ECONOMIC CALENDAR IMPACT ==="]
@@ -262,7 +279,7 @@ def _build_calendar_section(trades: list[dict]) -> str:
                 f"{evt['trades_count']} trades, P&L ${evt['pnl']:+,.2f}"
             )
 
-    return "\n".join(lines)
+    return "\n".join(lines), matched
 
 
 def _build_volatility_section(
@@ -296,8 +313,27 @@ def _build_news_section(
     return "=== NEWS CONTEXT ===\nNo trades matched any news in this period."
 
 
-def _build_trade_log(trades: list[dict]) -> str:
-    """Last 50 trades with behavioral tags."""
+def _near_event_tags_by_trade(
+    event_matches: list[dict[str, Any]],
+) -> dict[tuple, list[str]]:
+    near_by_key: dict[tuple, list[str]] = {}
+    for m in event_matches:
+        tk = _trade_key(m["trade"])
+        sorted_events = sorted(
+            m["matched_events"],
+            key=lambda me: _calendar_event_sort_key(me["event"]),
+        )
+        near_by_key[tk] = [
+            f"NEAR-{me['event']['event_name']}" for me in sorted_events
+        ]
+    return near_by_key
+
+
+def _build_trade_log(
+    trades: list[dict],
+    event_matches: list[dict[str, Any]] | None = None,
+) -> str:
+    """Full trade history with behavioral and calendar proximity tags."""
     revenge_list = ta.detect_revenge_trades(trades)
     mart_list = ta.detect_martingale(trades)
     quick_list = ta.detect_quick_exits(trades)
@@ -305,23 +341,24 @@ def _build_trade_log(trades: list[dict]) -> str:
     revenge_keys = {_trade_key(r["trade"]) for r in revenge_list}
     mart_keys = {_trade_key(m["trade"]) for m in mart_list}
     quick_keys = {_trade_key(q["trade"]) for q in quick_list}
+    near_by_key = _near_event_tags_by_trade(event_matches or [])
 
     sorted_trades = sorted(
         trades,
         key=lambda t: trade_instant_utc(t.get("opened_at")) or _EPOCH_COACH,
     )
-    recent = sorted_trades[-50:]
 
-    lines = [f"=== TRADE LOG (last {len(recent)} of {len(trades)}) ==="]
-    for t in recent:
+    lines = [f"=== TRADE LOG ({len(sorted_trades)} trades) ==="]
+    for t in sorted_trades:
         tk = _trade_key(t)
-        tags = []
+        tags: list[str] = []
         if tk in revenge_keys:
             tags.append("REVENGE")
         if tk in mart_keys:
             tags.append("MARTINGALE")
         if tk in quick_keys:
             tags.append("QUICK-EXIT")
+        tags.extend(near_by_key.get(tk, []))
         lines.append(_trade_line(t, tag=",".join(tags)))
     return "\n".join(lines)
 
@@ -359,10 +396,10 @@ def build_full_coaching_prompt(
     # Build all sections
     statistics = _build_statistics_section(trades, balance)
     behavioral = _build_behavioral_section(trades)
-    calendar = _build_calendar_section(trades)
+    calendar, event_matches = _build_calendar_section(trades)
     volatility = _build_volatility_section(trades, news, ohlc_by_symbol)
     news_section = _build_news_section(trades, news, broker_tz)
-    trade_log = _build_trade_log(trades)
+    trade_log = _build_trade_log(trades, event_matches)
 
     context = "\n\n".join([
         statistics, behavioral, calendar, volatility, news_section, trade_log,
@@ -538,7 +575,7 @@ async def get_ai_coaching(
         kwargs["since"] = datetime.fromisoformat(period_from)
     if period_to:
         kwargs["until"] = datetime.fromisoformat(period_to)
-    trade_models = get_trades(client, user_id, **kwargs)
+    trade_models = get_trades(client, user_id, limit=None, **kwargs)
     trades = [t.model_dump() for t in trade_models]
 
     if not trades:

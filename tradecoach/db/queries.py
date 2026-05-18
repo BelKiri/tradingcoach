@@ -188,7 +188,7 @@ def get_trades(
     since: date | datetime | None = None,
     until: date | datetime | None = None,
     symbol: str | None = None,
-    limit: int = 1000,
+    limit: int | None = 1000,
 ) -> list[Trade]:
     """Get trades with optional filters."""
     query = (
@@ -196,8 +196,9 @@ def get_trades(
         .select("*")
         .eq("user_id", user_id)
         .order("closed_at", desc=True)
-        .limit(limit)
     )
+    if limit is not None:
+        query = query.limit(limit)
     if account_id:
         query = query.eq("account_id", account_id)
     if since:

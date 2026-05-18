@@ -223,19 +223,21 @@ class TestBuildCalendarSection:
                 {"date": "2025-01-13", "time_utc": "13:30",
                  "currency": "USD", "event_name": "CPI", "impact": "high"},
             ]
-            section = _build_calendar_section(trades)
+            section, _ = _build_calendar_section(trades)
         assert "ECONOMIC CALENDAR" in section
 
     def test_no_events(self):
         trades = _make_trades(10, winners=6)
         with patch("tradecoach.services.coaching.load_calendar") as mock_cal:
             mock_cal.return_value = []
-            section = _build_calendar_section(trades)
+            section, matches = _build_calendar_section(trades)
         assert "No high-impact events" in section
+        assert matches == []
 
     def test_empty_trades(self):
-        section = _build_calendar_section([])
+        section, matches = _build_calendar_section([])
         assert section == ""
+        assert matches == []
 
 
 # ===================================================================
@@ -340,15 +342,90 @@ class TestBuildFullCoachingPrompt:
 
 
 class TestBuildTradeLog:
-    def test_limits_to_50(self):
+    def test_renders_all_trades(self):
         trades = _make_trades(60, winners=30)
         log = _build_trade_log(trades)
-        assert "last 50 of 60" in log
+        assert "TRADE LOG (60 trades)" in log
+        assert "last 50 of" not in log
+        assert log.count("| EURUSD") + log.count("| GBPUSD") == 60
 
     def test_tags_revenge(self):
         trades = _make_revenge_trades()
         log = _build_trade_log(trades)
         assert "REVENGE" in log
+
+    def test_near_event_tag_single(self):
+        trades = [
+            {
+                "symbol": "EURUSD", "direction": "buy", "lot": 0.1,
+                "profit_money": 50.0, "commission": 0.0, "swap": 0.0,
+                "stop_loss": 1.0950,
+                "opened_at": "2025-01-10T13:25:00",
+                "closed_at": "2025-01-10T14:00:00",
+            },
+        ]
+        event_matches = [
+            {
+                "trade": trades[0],
+                "matched_events": [
+                    {
+                        "event": {
+                            "date": "2025-01-10",
+                            "time_utc": "13:30",
+                            "event_name": "CPI",
+                            "impact": "high",
+                        },
+                        "minutes_offset": -5,
+                    },
+                ],
+            },
+        ]
+        log = _build_trade_log(trades, event_matches)
+        assert "[NEAR-CPI]" in log
+
+    def test_near_event_tags_chronological_order(self):
+        trades = [
+            {
+                "symbol": "EURUSD", "direction": "buy", "lot": 0.1,
+                "profit_money": 0.0, "commission": 0.0, "swap": 0.0,
+                "stop_loss": 1.0950,
+                "opened_at": "2025-01-10T13:45:00",
+                "closed_at": "2025-01-10T14:00:00",
+            },
+        ]
+        event_matches = [
+            {
+                "trade": trades[0],
+                "matched_events": [
+                    {
+                        "event": {
+                            "date": "2025-01-10",
+                            "time_utc": "14:00",
+                            "event_name": "CPI",
+                            "impact": "high",
+                        },
+                        "minutes_offset": -15,
+                    },
+                    {
+                        "event": {
+                            "date": "2025-01-10",
+                            "time_utc": "13:30",
+                            "event_name": "Non-Farm Payrolls",
+                            "impact": "high",
+                        },
+                        "minutes_offset": 15,
+                    },
+                ],
+            },
+        ]
+        log = _build_trade_log(trades, event_matches)
+        assert "[NEAR-Non-Farm Payrolls,NEAR-CPI]" in log
+
+    def test_no_near_tag_without_match(self):
+        trades = _make_trades(3, winners=2)
+        log = _build_trade_log(trades, [])
+        assert "NEAR-" not in log
+        assert "]" not in log.split("TRADE LOG")[1].split("\n")[1]
 
 
 # ===================================================================
