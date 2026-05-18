@@ -3,6 +3,7 @@
 import * as React from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { highlightDollarsInPlainText } from "@/lib/highlight-dollars";
 import { cn } from "@/lib/utils";
 
 /** react-markdown passes `node` (hast); strip before spreading onto DOM elements. */
@@ -10,48 +11,6 @@ function omitHastNode<T extends Record<string, unknown>>(props: T): Omit<T, "nod
   return Object.fromEntries(
     Object.entries(props).filter(([key]) => key !== "node"),
   ) as Omit<T, "node">;
-}
-
-/**
- * Ported from legacy FormattedResponse, with `/week` and optional `~` prefix
- * so patterns like ~$200/week match. Leading `-$…` is matched first so the
- * span always covers the minus (legacy regex order could miss that case).
- */
-const DOLLAR_HIGHLIGHT_RE =
-  /(-\$[\d,]+(?:\.\d+)?(?:\/(?:month|week))?)|((?:~)?\$[\+]?[\d,]+(?:\.\d+)?(?:\/(?:month|week))?)/g;
-
-function highlightDollarsInPlainText(text: string): React.ReactNode {
-  const parts: React.ReactNode[] = [];
-  let last = 0;
-  let m: RegExpExecArray | null;
-  const re = new RegExp(DOLLAR_HIGHLIGHT_RE.source, "g");
-  let k = 0;
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) {
-      parts.push(text.slice(last, m.index));
-    }
-    const full = m[0];
-    const isNeg = m[1] != null || full.includes("-");
-    parts.push(
-      <span
-        key={`coach-$-${k++}`}
-        className={isNeg ? "text-red-400 font-medium" : "text-emerald-400 font-medium"}
-      >
-        {full}
-      </span>,
-    );
-    last = m.index + full.length;
-  }
-  if (last < text.length) {
-    parts.push(text.slice(last));
-  }
-  if (parts.length === 0) {
-    return text;
-  }
-  if (parts.length === 1 && typeof parts[0] === "string") {
-    return parts[0];
-  }
-  return <>{parts}</>;
 }
 
 function processChildren(children: React.ReactNode): React.ReactNode {
