@@ -454,7 +454,6 @@ def _empty_volatility_result() -> dict[str, Any]:
 
 def build_volatility_context_for_coaching(
     trades: list[dict],
-    news: list[dict[str, str]] | None = None,
     ohlc_by_symbol: dict[str, list[dict[str, Any]]] | None = None,
 ) -> str:
     """Build formatted volatility analysis for AI coaching prompts."""
@@ -538,36 +537,7 @@ def build_volatility_context_for_coaching(
                 f"  You: {tc} trades, {wins}W/{losses}L, ${dp:+,.0f}"
             )
 
-            context_line = _find_news_for_date(date, symbol, news)
-            lines.append(f"  Context: {context_line}")
-
     lines.append("")
-    lines.append(
-        "Note: ATR calculated from 14 days before each trade. "
-        "News context is informational."
-    )
+    lines.append("Note: ATR calculated from 14 days before each trade.")
 
     return "\n".join(lines)
-
-
-def _find_news_for_date(
-    date: str,
-    symbol: str,
-    news: list[dict[str, str]] | None,
-) -> str:
-    """Find a news headline for a given date and symbol."""
-    if not news:
-        return "no data available"
-
-    from tradecoach.services.news import match_news_to_instruments
-
-    for item in news:
-        news_date = item.get("date", "")[:10]
-        if news_date != date:
-            continue
-        instruments = match_news_to_instruments(item)
-        if symbol in instruments:
-            headline = item.get("headline", "")
-            return f"'{headline}'"
-
-    return "no data available"

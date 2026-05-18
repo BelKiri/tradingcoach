@@ -1,6 +1,6 @@
 """
 AI coaching — assembles ALL RAG data (trade stats, behavioral patterns,
-calendar impact, volatility analysis, news context) into a prompt for
+calendar impact, volatility analysis) into a prompt for
 Claude Sonnet to produce personalized coaching.
 
 Supports first-time analysis and repeat analysis with previous session comparison.
@@ -24,7 +24,6 @@ from tradecoach.services.llm import LLMError, LLMUsage, deep_analysis
 from tradecoach.services.market_data import (
     build_volatility_context_for_coaching,
 )
-from tradecoach.services.news import build_news_context_for_coaching
 
 _EPOCH_COACH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
@@ -284,33 +283,16 @@ def _build_calendar_section(
 
 def _build_volatility_section(
     trades: list[dict],
-    news: list[dict[str, str]] | None = None,
     ohlc_by_symbol: dict[str, list[dict]] | None = None,
 ) -> str:
     """Section d) VOLATILITY ANALYSIS."""
     ctx = build_volatility_context_for_coaching(
         trades,
-        news=news,
         ohlc_by_symbol=ohlc_by_symbol,
     )
     if ctx:
         return f"=== {ctx}"
     return "=== VOLATILITY ANALYSIS ===\nNo volatile days detected in this period."
-
-
-def _build_news_section(
-    trades: list[dict],
-    news: list[dict[str, str]] | None,
-    broker_timezone: str,
-) -> str:
-    """Section e) NEWS CONTEXT."""
-    if not news:
-        return "=== NEWS CONTEXT ===\nNo news data available for this period."
-
-    ctx = build_news_context_for_coaching(trades, news)
-    if ctx:
-        return f"=== {ctx}"
-    return "=== NEWS CONTEXT ===\nNo trades matched any news in this period."
 
 
 def _near_event_tags_by_trade(
@@ -372,7 +354,6 @@ def build_full_coaching_prompt(
     account: dict | None = None,
     previous_session: dict | None = None,
     *,
-    news: list[dict[str, str]] | None = None,
     ohlc_by_symbol: dict[str, list[dict]] | None = None,
 ) -> tuple[str, str]:
     """Assemble all RAG data into a coaching prompt.
@@ -381,7 +362,6 @@ def build_full_coaching_prompt(
         trades: Trade dicts.
         account: Account dict with broker_timezone, starting_balance, name.
         previous_session: Previous coaching session dict (if repeat analysis).
-        news: News items for context.
         ohlc_by_symbol: Pre-fetched OHLC data per symbol (for testing).
 
     Returns:
@@ -390,19 +370,17 @@ def build_full_coaching_prompt(
     if not trades:
         raise LLMError("No trades to analyze")
 
-    broker_tz = (account or {}).get("broker_timezone", "UTC+2")
     balance = (account or {}).get("starting_balance")
 
     # Build all sections
     statistics = _build_statistics_section(trades, balance)
     behavioral = _build_behavioral_section(trades)
     calendar, event_matches = _build_calendar_section(trades)
-    volatility = _build_volatility_section(trades, news, ohlc_by_symbol)
-    news_section = _build_news_section(trades, news, broker_tz)
+    volatility = _build_volatility_section(trades, ohlc_by_symbol)
     trade_log = _build_trade_log(trades, event_matches)
 
     context = "\n\n".join([
-        statistics, behavioral, calendar, volatility, news_section, trade_log,
+        statistics, behavioral, calendar, volatility, trade_log,
     ])
 
     if previous_session:
@@ -543,7 +521,6 @@ async def get_ai_coaching(
     *,
     period_from: str | None = None,
     period_to: str | None = None,
-    news: list[dict[str, str]] | None = None,
     ohlc_by_symbol: dict[str, list[dict]] | None = None,
 ) -> dict[str, Any]:
     """Generate AI coaching with full RAG context, save session to DB.
@@ -553,7 +530,6 @@ async def get_ai_coaching(
         account_id: Supabase account ID.
         period_from: ISO date string for trade filter (optional).
         period_to: ISO date string for trade filter (optional).
-        news: News items (optional, for testing).
         ohlc_by_symbol: Pre-fetched OHLC data (optional, for testing).
 
     Returns:
@@ -596,7 +572,7 @@ async def get_ai_coaching(
     # Build prompt
     prompt, context = build_full_coaching_prompt(
         trades, account_dict, prev_session,
-        news=news, ohlc_by_symbol=ohlc_by_symbol,
+        ohlc_by_symbol=ohlc_by_symbol,
     )
 
     # Call LLM
@@ -623,7 +599,7 @@ async def get_ai_coaching(
             "behavioral": True,
             "calendar": True,
             "volatility": True,
-            "news": news is not None,
+            "news": False,
         },
         recommendations=recommendations,
         ai_response=ai_text,

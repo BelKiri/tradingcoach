@@ -368,28 +368,6 @@ class TestBuildVolatilityContext:
         assert "WR" in ctx
         assert "P&L" in ctx
 
-    def test_no_news_shows_no_data(self):
-        trades, ohlc, _ = self._build_scenario()
-        ctx = build_volatility_context_for_coaching(
-            trades, news=None, ohlc_by_symbol=ohlc,
-        )
-        assert "no data available" in ctx
-
-    def test_with_news_context(self):
-        trades, ohlc, vol_date = self._build_scenario()
-        news = [{
-            "date": f"{vol_date} 09:00",
-            "headline": "Iran-Israel military escalation",
-            "summary": "Geopolitical tensions rise",
-            "source": "Reuters",
-            "url": "",
-            "category": "general",
-        }]
-        ctx = build_volatility_context_for_coaching(
-            trades, news=news, ohlc_by_symbol=ohlc,
-        )
-        assert "Iran-Israel" in ctx
-
     def test_empty_trades(self):
         ctx = build_volatility_context_for_coaching([])
         assert ctx == ""

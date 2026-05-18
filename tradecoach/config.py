@@ -33,7 +33,6 @@ class Settings(BaseSettings):
 
     # Market data
     twelvedata_api_key: str = ""
-    finnhub_api_key: str = ""
 
     # Stripe
     stripe_secret_key: str = ""

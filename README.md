@@ -23,7 +23,7 @@ release history.
 - **Frontend:** Next.js 14, TypeScript, Tailwind CSS, shadcn/ui
 - **Database & auth:** Supabase (Postgres, Auth with Google OAuth)
 - **AI:** Anthropic Claude
-- **Market data:** TwelveData, Finnhub
+- **Market data:** TwelveData
 
 ## Architecture
 
@@ -59,7 +59,6 @@ Required environment variables (see `.env.example`):
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `ANTHROPIC_API_KEY`
 - `TWELVEDATA_API_KEY`
-- `FINNHUB_API_KEY`
 
 ## Testing
 

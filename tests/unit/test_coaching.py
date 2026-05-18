@@ -258,7 +258,6 @@ class TestBuildFullCoachingPrompt:
         assert "BEHAVIORAL PATTERNS" in context
         assert "ECONOMIC CALENDAR" in context
         assert "VOLATILITY ANALYSIS" in context
-        assert "NEWS CONTEXT" in context
         assert "TRADE LOG" in context
 
         # Prompt should be first analysis
@@ -315,26 +314,6 @@ class TestBuildFullCoachingPrompt:
     def test_no_trades_raises(self):
         with pytest.raises(LLMError, match="No trades"):
             build_full_coaching_prompt([], None)
-
-    def test_no_news_shows_message(self):
-        trades = _make_trades(5)
-        with patch("tradecoach.services.coaching.load_calendar", return_value=[]):
-            with patch("tradecoach.services.coaching.build_volatility_context_for_coaching", return_value=""):
-                _, context = build_full_coaching_prompt(trades, news=None)
-        assert "No news data available" in context
-
-    def test_with_news(self):
-        trades = _make_trades(5)
-        news = [
-            {"date": "2025-01-10 09:00", "headline": "US CPI hot",
-             "summary": "Inflation up", "source": "Reuters", "category": "forex"},
-        ]
-        with patch("tradecoach.services.coaching.load_calendar", return_value=[]):
-            with patch("tradecoach.services.coaching.build_volatility_context_for_coaching", return_value=""):
-                _, context = build_full_coaching_prompt(trades, news=news)
-        # Either news matched or "No trades matched" — both are valid
-        assert "NEWS CONTEXT" in context
-
 
 # ===================================================================
 # Trade log
