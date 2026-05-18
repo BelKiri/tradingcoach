@@ -270,11 +270,16 @@ class TestBuildFullCoachingPrompt:
         assert "VOLATILITY ANALYSIS" in context
         assert "TRADE LOG" in context
 
-        # Prompt should be first analysis
-        assert "MAIN PROBLEM" in prompt
-        assert "HIDDEN PATTERN" in prompt
+        # Prompt should be first analysis (three-section redesign)
+        assert "## Your Strength" in prompt
+        assert "## Main Problems" in prompt
+        assert "## Hidden Patterns" in prompt
+        assert "DOLLAR AMOUNT FORMATTING" in prompt
+        assert "savings_estimate_usd" in prompt
+        assert "1.5x or more above its normal level" in prompt
         assert "<rules>" in prompt
-        assert "PROJECTED SAVINGS" in prompt
+        assert "MAIN PROBLEM" not in prompt
+        assert "PROJECTED SAVINGS" not in prompt
         assert "ACTION PLAN" not in prompt
         assert "Test" in prompt  # account name
 
