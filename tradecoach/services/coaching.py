@@ -8,8 +8,13 @@ Supports first-time analysis and repeat analysis with previous session compariso
 
 from __future__ import annotations
 
+import json
+import logging
+import re
 from datetime import datetime, timezone
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from tradecoach.services import trade_analyzer as ta
 from tradecoach.services._helpers import _net_profit, _to_dt
@@ -424,29 +429,44 @@ When the market is calm, you overtrade out of boredom, then revenge-trade the lo
 
 3. STRENGTH: What does this trader do well? Be specific with numbers.
 
-4. ACTION PLAN: Give exactly 3 concrete rules for next week. \
-Each rule must be: \
-- Specific (not "trade less" but "maximum 3 trades per day") \
-- Measurable (the trader can check yes/no at end of week) \
-- Based on data (cite the specific numbers that justify the rule) \
-- Include estimated savings in $ if followed
-
-5. PROJECTED SAVINGS: If the trader follows all 3 rules, how much $ would they save \
-per month based on their historical data?
+4. PROJECTED SAVINGS: If the trader follows all 3 rules in the block below, how much $ \
+would they save per month based on their historical data?
 
 Format: 300 words max. Direct language. No fluff. Start with the main problem immediately. \
-Use the trader's actual numbers throughout."""
+Use the trader's actual numbers throughout. Do NOT include an action plan in the narrative.
+
+After the narrative, you MUST end your response with a <rules> block containing a JSON array \
+of exactly 3 rule objects. No text after </rules>.
+
+Each rule object:
+- "action": short imperative, 5-12 words
+- "rationale": 1-2 sentences with specific numbers from the data
+- "savings_estimate_usd": integer, projected monthly savings if followed (0 if not estimable)
+
+Example:
+<rules>
+[
+  {"action": "Maximum 3 trades per calm day", "rationale": "You took 59 trades on normal-volatility days with 32% WR, losing $2,338.", "savings_estimate_usd": 400},
+  {"action": "No trading within 30 minutes of a loss", "rationale": "Revenge trades after losses cost $300/month in your log.", "savings_estimate_usd": 300},
+  {"action": "Only trade XAUUSD and EURUSD", "rationale": "GBPUSD trades lost $200 over this period with no edge.", "savings_estimate_usd": 200}
+]
+</rules>"""
 
 
 def _build_repeat_prompt(prev: dict) -> str:
     """Build repeat analysis prompt with previous session comparison."""
     created = prev.get("created_at", "unknown date")
     main_problem = prev.get("main_problem", "not recorded")
+    prev_rules = parse_json_field(prev.get("rules")) or []
     recommendations = parse_json_field(prev.get("recommendations")) or []
     metrics = parse_json_field(prev.get("metrics_snapshot")) or {}
 
     rec_text = ""
-    if recommendations:
+    if prev_rules:
+        for i, rule in enumerate(prev_rules, 1):
+            action = rule.get("action", "?") if isinstance(rule, dict) else str(rule)
+            rec_text += f"\n   {i}. {action}"
+    elif recommendations:
         for i, r in enumerate(recommendations, 1):
             rec_text += f"\n   {i}. {r}"
     else:
@@ -484,13 +504,27 @@ YOUR TASK:
 3. NEW INSIGHT: What changed? Any new pattern that wasn't there before? \
 Use volatility and calendar data to explain WHY things changed.
 
-4. UPDATED PLAN: Keep rules that worked, replace rules that didn't. \
-Same format: specific, measurable, data-backed, with $ estimate.
-
-5. PROGRESS SCORE: Rate improvement 1-10 with justification.
+4. PROGRESS SCORE: Rate improvement 1-10 with justification.
 
 Format: 300 words max. Start with verdict emoji immediately. \
-Use the trader's actual numbers throughout."""
+Use the trader's actual numbers throughout. Do NOT include an updated plan in the narrative.
+
+After the narrative, you MUST end your response with a <rules> block containing a JSON array \
+of exactly 3 rule objects (keep rules that worked, replace rules that did not). No text after </rules>.
+
+Each rule object:
+- "action": short imperative, 5-12 words
+- "rationale": 1-2 sentences with specific numbers from the data
+- "savings_estimate_usd": integer, projected monthly savings if followed (0 if not estimable)
+
+Example:
+<rules>
+[
+  {{"action": "Keep maximum 3 trades per day", "rationale": "Average dropped from 5 to 2.8; saved ~$350.", "savings_estimate_usd": 350}},
+  {{"action": "Close terminal for 1 hour after any loss", "rationale": "4 revenge trades cost $180 this period.", "savings_estimate_usd": 300}},
+  {{"action": "Only trade London session", "rationale": "Asian session trades lost $150 vs London.", "savings_estimate_usd": 150}}
+]
+</rules>"""
 
 
 # ===================================================================
@@ -581,10 +615,10 @@ async def get_ai_coaching(
     # Build metrics snapshot
     metrics = _build_metrics_snapshot(trades)
 
-    # Parse recommendations from AI response
-    recommendations = _parse_recommendations(ai_text)
-    main_problem = _parse_main_problem(ai_text)
-    verdict = _parse_verdict(ai_text) if prev_session else None
+    rules = _parse_rules(ai_text)
+    narrative = _strip_rules_block(ai_text)
+    main_problem = _parse_main_problem(narrative)
+    verdict = _parse_verdict(narrative) if prev_session else None
 
     # Save session
     session_id = _save_coaching_session(
@@ -601,12 +635,16 @@ async def get_ai_coaching(
             "volatility": True,
             "news": False,
         },
-        recommendations=recommendations,
-        ai_response=ai_text,
+        recommendations=None,
+        rules=rules,
+        ai_response=narrative,
         verdict=verdict,
         main_problem=main_problem,
         new_trades_count=len(trades),
         model_used=usage.model,
+        input_tokens=usage.input_tokens,
+        output_tokens=usage.output_tokens,
+        cost_usd=usage.cost_usd,
     )
 
     if not increment_coaching_sessions_used(client, user_id):
@@ -616,9 +654,10 @@ async def get_ai_coaching(
 
     return {
         "session_id": session_id,
-        "ai_response": ai_text,
+        "ai_response": narrative,
         "metrics_snapshot": metrics,
         "verdict": verdict,
+        "rules": rules,
         "created_at": datetime.now(tz=None).isoformat(),
         "usage": {
             "model": usage.model,
@@ -660,16 +699,18 @@ def _save_coaching_session(
     period_to: str | None,
     metrics_snapshot: dict,
     rag_context: dict,
-    recommendations: list[str],
+    recommendations: list[str] | None,
+    rules: list[dict[str, Any]] | None,
     ai_response: str,
     verdict: str | None,
     main_problem: str | None,
     new_trades_count: int,
     model_used: str,
+    input_tokens: int,
+    output_tokens: int,
+    cost_usd: float,
 ) -> str:
     """Insert a coaching session row. Returns the session ID."""
-    import json
-
     row = {
         "user_id": user_id,
         "account_id": account_id,
@@ -677,12 +718,16 @@ def _save_coaching_session(
         "period_to": period_to,
         "metrics_snapshot": json.dumps(metrics_snapshot),
         "rag_context": json.dumps(rag_context),
-        "recommendations": json.dumps(recommendations),
+        "recommendations": json.dumps(recommendations) if recommendations is not None else None,
+        "rules": json.dumps(rules) if rules is not None else None,
         "ai_response": ai_response,
         "verdict": verdict,
         "main_problem": main_problem,
         "new_trades_count": new_trades_count,
         "model_used": model_used,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "cost_usd": cost_usd,
     }
     result = client.table("coaching_sessions").insert(row).execute()
     return result.data[0]["id"]
@@ -692,36 +737,69 @@ def _save_coaching_session(
 # Parsers for AI response
 # ===================================================================
 
-def _parse_recommendations(text: str) -> list[str]:
-    """Extract numbered rules from AI response."""
-    import re
+_RULES_BLOCK_RE = re.compile(r"<rules>\s*(.*?)\s*</rules>", re.DOTALL | re.IGNORECASE)
+_RULES_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE | re.MULTILINE)
 
-    recs: list[str] = []
-    # Look for patterns like "1." "2." "3." in the ACTION PLAN section
-    # or "Rule 1:" etc.
-    lines = text.split("\n")
-    in_plan = False
-    for line in lines:
-        stripped = line.strip()
-        if any(k in stripped.upper() for k in ["ACTION PLAN", "UPDATED PLAN", "RULES"]):
-            in_plan = True
-            continue
-        if in_plan:
-            # Match numbered items
-            m = re.match(r"^\d+[\.\)]\s*(.+)", stripped)
-            if m:
-                recs.append(m.group(1).strip())
-            elif stripped.startswith("- ") and len(recs) < 3:
-                recs.append(stripped[2:].strip())
-            # Stop after getting 3 or hitting next section
-            if len(recs) >= 3:
-                break
-            if stripped and stripped[0] in "0123456789" and "." not in stripped[:3]:
-                continue
-            if re.match(r"^[A-Z]{2,}", stripped) and ":" in stripped:
-                break
 
-    return recs[:3]
+def _extract_rules_json(text: str) -> str | None:
+    """Return raw JSON string from the last <rules> block, or None."""
+    matches = list(_RULES_BLOCK_RE.finditer(text))
+    if not matches:
+        return None
+    content = matches[-1].group(1).strip()
+    content = _RULES_FENCE_RE.sub("", content).strip()
+    return content or None
+
+
+def _validate_rules(data: object) -> list[dict[str, Any]] | None:
+    """Validate parsed rules array shape. Returns normalized list or None."""
+    if not isinstance(data, list) or len(data) != 3:
+        return None
+    normalized: list[dict[str, Any]] = []
+    for item in data:
+        if not isinstance(item, dict):
+            return None
+        action = item.get("action")
+        rationale = item.get("rationale")
+        savings = item.get("savings_estimate_usd")
+        if not isinstance(action, str) or not action.strip():
+            return None
+        if not isinstance(rationale, str) or not rationale.strip():
+            return None
+        if isinstance(savings, bool) or not isinstance(savings, int):
+            return None
+        normalized.append({
+            "action": action.strip(),
+            "rationale": rationale.strip(),
+            "savings_estimate_usd": savings,
+        })
+    return normalized
+
+
+def _parse_rules(text: str) -> list[dict[str, Any]] | None:
+    """Extract and validate structured rules from a <rules> JSON block."""
+    raw = _extract_rules_json(text)
+    if raw is None:
+        logger.warning("rules parse failed: no <rules> block found")
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        logger.warning(
+            "rules parse failed: invalid JSON (%s); excerpt=%r",
+            exc,
+            raw[:300],
+        )
+        return None
+    rules = _validate_rules(data)
+    if rules is None:
+        logger.warning("rules parse failed: invalid shape; excerpt=%r", raw[:300])
+    return rules
+
+
+def _strip_rules_block(text: str) -> str:
+    """Remove all <rules>...</rules> blocks from the narrative."""
+    return _RULES_BLOCK_RE.sub("", text).rstrip()
 
 
 def _parse_main_problem(text: str) -> str | None:

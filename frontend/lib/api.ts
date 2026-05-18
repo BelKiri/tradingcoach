@@ -229,11 +229,18 @@ export interface CoachingUsage {
   cost_usd: number;
 }
 
+export interface ActionPlanRule {
+  action: string;
+  rationale: string;
+  savings_estimate_usd: number;
+}
+
 export interface CoachingResponse {
   session_id: string;
   ai_response: string;
   metrics_snapshot: Record<string, unknown>;
   verdict: string | null;
+  rules: ActionPlanRule[] | null;
   created_at: string;
   usage: CoachingUsage;
 }
@@ -245,6 +252,7 @@ export interface CoachingSession {
   created_at: string;
   ai_response: string;
   metrics_snapshot: Record<string, unknown> | null;
+  rules: ActionPlanRule[] | null;
   recommendations: string[] | null;
   verdict: string | null;
   main_problem: string | null;

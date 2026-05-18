@@ -42,11 +42,18 @@ class CoachingUsage(BaseModel):
     cost_usd: float
 
 
+class RuleItem(BaseModel):
+    action: str
+    rationale: str
+    savings_estimate_usd: int
+
+
 class CoachingResponse(BaseModel):
     session_id: str
     ai_response: str
     metrics_snapshot: dict[str, Any]
     verdict: str | None
+    rules: list[RuleItem] | None
     created_at: str
     usage: CoachingUsage
 
@@ -58,6 +65,7 @@ class CoachingSessionOut(BaseModel):
     created_at: str
     ai_response: str
     metrics_snapshot: dict[str, Any] | None
+    rules: list[RuleItem] | None
     recommendations: list[str] | None
     verdict: str | None
     main_problem: str | None
@@ -82,6 +90,7 @@ def _session_to_dict(row: dict) -> dict:
         "created_at": row.get("created_at", ""),
         "ai_response": row.get("ai_response", ""),
         "metrics_snapshot": parse_json_field(row.get("metrics_snapshot")),
+        "rules": parse_json_field(row.get("rules")),
         "recommendations": parse_json_field(row.get("recommendations")),
         "verdict": row.get("verdict"),
         "main_problem": row.get("main_problem"),

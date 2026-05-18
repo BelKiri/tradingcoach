@@ -7,7 +7,7 @@ Tests verify:
   - get_ai_coaching: mock LLM → session saved
   - API endpoint: mock request → response format
   - Legacy generate_ai_coaching: backward compatibility
-  - Parsers: recommendations, main_problem, verdict
+  - Parsers: rules block, main_problem, verdict
 """
 
 from __future__ import annotations
@@ -26,8 +26,9 @@ from tradecoach.services.coaching import (
     _build_statistics_section,
     _build_trade_log,
     _parse_main_problem,
-    _parse_recommendations,
+    _parse_rules,
     _parse_verdict,
+    _strip_rules_block,
     build_full_coaching_prompt,
     generate_ai_coaching,
     get_ai_coaching,
@@ -109,6 +110,13 @@ def _mock_llm_usage() -> LLMUsage:
     )
 
 
+_MOCK_RULES_JSON = """\
+[
+  {"action": "Maximum 3 trades per calm day", "rationale": "You took 59 trades on normal days with 32% WR, losing $2,338.", "savings_estimate_usd": 400},
+  {"action": "No trading within 30 minutes of a loss", "rationale": "Revenge trades after losses cost $300/month in your log.", "savings_estimate_usd": 300},
+  {"action": "Only trade XAUUSD and EURUSD", "rationale": "GBPUSD trades lost $200 over this period with no edge.", "savings_estimate_usd": 200}
+]"""
+
 _MOCK_AI_RESPONSE = """\
 Your biggest problem is overtrading on calm days. You took 59 trades on normal days \
 with 32% WR, losing $2,338. Meanwhile your 22 volatile-day trades had 36% WR and made $1,375.
@@ -117,12 +125,11 @@ with 32% WR, losing $2,338. Meanwhile your 22 volatile-day trades had 36% WR and
 
 **STRENGTH**: You respect stop losses on 85% of trades, saving an estimated $800.
 
-**ACTION PLAN**:
-1. Maximum 3 trades per day on non-volatile days — saves ~$400/month
-2. No trading within 30 minutes of a loss — saves ~$300/month
-3. Only trade XAUUSD and EURUSD, skip GBPUSD — saves ~$200/month
+**PROJECTED SAVINGS**: Following all 3 rules saves approximately $900/month.
 
-**PROJECTED SAVINGS**: Following all 3 rules saves approximately $900/month."""
+<rules>
+""" + _MOCK_RULES_JSON + """
+</rules>"""
 
 
 _MOCK_REPEAT_RESPONSE = """\
@@ -135,12 +142,15 @@ _MOCK_REPEAT_RESPONSE = """\
 
 **NEW INSIGHT**: Your Wednesday performance improved 40% since reducing trade count.
 
-**UPDATED PLAN**:
-1. Keep max 3 trades/day rule — working well
-2. After any loss, close terminal for 1 hour — saves ~$300/month
-3. Only trade London session, skip Asian — saves ~$150/month
+**PROGRESS SCORE**: 7/10 — good improvement on volume, need work on emotional control.
 
-**PROGRESS SCORE**: 7/10 — good improvement on volume, need work on emotional control."""
+<rules>
+[
+  {"action": "Keep max 3 trades per day", "rationale": "Average dropped from 5 to 2.8; saved ~$350.", "savings_estimate_usd": 350},
+  {"action": "Close terminal for 1 hour after any loss", "rationale": "4 revenge trades cost $180 this period.", "savings_estimate_usd": 300},
+  {"action": "Only trade London session", "rationale": "Asian session trades lost $150 vs London.", "savings_estimate_usd": 150}
+]
+</rules>"""
 
 
 # ===================================================================
@@ -263,8 +273,9 @@ class TestBuildFullCoachingPrompt:
         # Prompt should be first analysis
         assert "MAIN PROBLEM" in prompt
         assert "HIDDEN PATTERN" in prompt
-        assert "ACTION PLAN" in prompt
+        assert "<rules>" in prompt
         assert "PROJECTED SAVINGS" in prompt
+        assert "ACTION PLAN" not in prompt
         assert "Test" in prompt  # account name
 
     def test_repeat_analysis_has_comparison(self):
@@ -431,17 +442,41 @@ class TestMetricsSnapshot:
 
 
 class TestParsers:
-    def test_parse_recommendations(self):
-        recs = _parse_recommendations(_MOCK_AI_RESPONSE)
-        assert len(recs) == 3
-        assert "3 trades" in recs[0].lower() or "maximum" in recs[0].lower()
+    def test_parse_rules_valid(self):
+        rules = _parse_rules(_MOCK_AI_RESPONSE)
+        assert rules is not None
+        assert len(rules) == 3
+        assert rules[0]["action"] == "Maximum 3 trades per calm day"
+        assert rules[0]["savings_estimate_usd"] == 400
 
-    def test_parse_recommendations_empty(self):
-        recs = _parse_recommendations("No rules here.")
-        assert recs == []
+    def test_parse_rules_missing_block(self):
+        assert _parse_rules("No rules here.") is None
+
+    def test_parse_rules_invalid_json(self):
+        text = "Analysis.\n<rules>not json</rules>"
+        assert _parse_rules(text) is None
+
+    def test_parse_rules_wrong_count(self):
+        text = 'Analysis.\n<rules>[{"action":"a","rationale":"b","savings_estimate_usd":1}]</rules>'
+        assert _parse_rules(text) is None
+
+    def test_parse_rules_with_markdown_fence(self):
+        text = (
+            "Analysis.\n<rules>\n```json\n"
+            + _MOCK_RULES_JSON
+            + "\n```\n</rules>"
+        )
+        rules = _parse_rules(text)
+        assert rules is not None
+        assert len(rules) == 3
+
+    def test_strip_rules_block(self):
+        stripped = _strip_rules_block(_MOCK_AI_RESPONSE)
+        assert "<rules>" not in stripped
+        assert "PROJECTED SAVINGS" in stripped
 
     def test_parse_main_problem(self):
-        problem = _parse_main_problem(_MOCK_AI_RESPONSE)
+        problem = _parse_main_problem(_strip_rules_block(_MOCK_AI_RESPONSE))
         assert problem is not None
         assert "overtrading" in problem.lower()
 
@@ -490,7 +525,7 @@ class TestGetAiCoaching:
             patch("tradecoach.db.queries.get_account", return_value=account_model),
             patch("tradecoach.db.queries.get_trades", return_value=trade_models),
             patch("tradecoach.services.coaching._get_latest_coaching_session", return_value=None),
-            patch("tradecoach.services.coaching._save_coaching_session", return_value="session-123"),
+            patch("tradecoach.services.coaching._save_coaching_session", return_value="session-123") as mock_save,
             patch("tradecoach.services.beta_quota.assert_can_generate_coaching"),
             patch("tradecoach.services.beta_quota.increment_coaching_sessions_used", return_value=True),
             patch("tradecoach.services.coaching.load_calendar", return_value=[]),
@@ -501,10 +536,18 @@ class TestGetAiCoaching:
             result = await get_ai_coaching("user-1", "account-1")
 
         assert result["session_id"] == "session-123"
-        assert result["ai_response"] == _MOCK_AI_RESPONSE
+        assert "<rules>" not in result["ai_response"]
+        assert result["rules"] is not None
+        assert len(result["rules"]) == 3
         assert "metrics_snapshot" in result
         assert result["verdict"] is None  # first session
         assert result["usage"]["model"] == "claude-sonnet-4-20250514"
+        save_kwargs = mock_save.call_args.kwargs
+        assert save_kwargs["recommendations"] is None
+        assert save_kwargs["rules"] is not None
+        assert save_kwargs["input_tokens"] == 1000
+        assert save_kwargs["output_tokens"] == 500
+        assert save_kwargs["cost_usd"] == 0.0105
 
     @pytest.mark.asyncio
     async def test_repeat_session(self):
@@ -583,6 +626,7 @@ class TestCoachingAPI:
             "ai_response": "Your trading...",
             "metrics_snapshot": {"trades_count": 10, "win_rate": 60.0},
             "verdict": None,
+            "rules": None,
             "created_at": "2025-01-20T12:00:00",
             "usage": {
                 "model": "claude-sonnet-4-20250514",
@@ -619,6 +663,7 @@ class TestCoachingAPI:
             "ai_response": "Analysis...",
             "metrics_snapshot": {},
             "verdict": "progress",
+            "rules": None,
             "created_at": "2025-01-20T12:00:00",
             "usage": {"model": "test", "input_tokens": 0, "output_tokens": 0, "cost_usd": 0},
         }

@@ -191,23 +191,34 @@ export default function CoachingSessionPage() {
         </CardContent>
       </Card>
 
-      {/* Recommendations */}
-      {session.recommendations && session.recommendations.length > 0 && (
+      {/* Action plan (structured rules) */}
+      {session.rules && session.rules.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Action Items</CardTitle>
+            <CardTitle className="text-lg">План действий</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {session.recommendations.map((r, i) => (
+              {session.rules.map((rule, i) => (
                 <div
                   key={i}
                   className="flex items-start gap-3 rounded-md bg-muted/30 px-4 py-3"
                 >
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
-                    {i + 1}
-                  </span>
-                  <p className="text-sm">{r}</p>
+                  <span
+                    className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border border-muted-foreground/40 bg-background"
+                    aria-hidden
+                  />
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <p className="text-sm font-medium">{rule.action}</p>
+                      {rule.savings_estimate_usd > 0 && (
+                        <Badge variant="secondary" className="shrink-0 text-xs">
+                          ~${rule.savings_estimate_usd.toLocaleString("en-US")}/мес
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">{rule.rationale}</p>
+                  </div>
                 </div>
               ))}
             </div>
