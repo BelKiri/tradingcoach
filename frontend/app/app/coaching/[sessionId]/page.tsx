@@ -16,6 +16,7 @@ import { CoachMarkdown } from "@/lib/coach-markdown";
 import { highlightDollarsInPlainText } from "@/lib/highlight-dollars";
 import { fetcher } from "@/lib/swr";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CoachingSessionFeedback } from "@/components/coaching/coaching-session-feedback";
 
 const verdictConfig: Record<
   string,
@@ -191,6 +192,8 @@ export default function CoachingSessionPage() {
           <CoachMarkdown text={session.ai_response} />
         </CardContent>
       </Card>
+
+      <CoachingSessionFeedback sessionId={sessionId} session={session} />
 
       {/* Action plan (structured rules) */}
       {session.rules && session.rules.length > 0 && (

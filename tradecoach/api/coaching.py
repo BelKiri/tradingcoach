@@ -5,10 +5,11 @@ AI coaching endpoint — full RAG-powered coaching analysis.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field, model_validator
 
 from tradecoach.api.auth import get_current_user, require_self
 from tradecoach.db.queries import get_client
@@ -19,6 +20,8 @@ from tradecoach.utils.json_helpers import parse_json_field
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+FEEDBACK_COMMENT_MAX_LEN = 2000
 
 
 # ---------------------------------------------------------------------------
@@ -71,6 +74,25 @@ class CoachingSessionOut(BaseModel):
     main_problem: str | None
     new_trades_count: int | None
     model_used: str | None
+    feedback_rating: int | None = None
+    feedback_comment: str | None = None
+    feedback_learned_new: bool | None = None
+    feedback_submitted_at: str | None = None
+
+
+class CoachingFeedbackRequest(BaseModel):
+    feedback_rating: int | None = Field(default=None, ge=1, le=5)
+    feedback_learned_new: bool | None = None
+    feedback_comment: str | None = Field(default=None, max_length=FEEDBACK_COMMENT_MAX_LEN)
+
+    @model_validator(mode="after")
+    def at_least_one_field(self) -> CoachingFeedbackRequest:
+        has_rating = self.feedback_rating is not None
+        has_learned = self.feedback_learned_new is not None
+        has_comment = bool(self.feedback_comment and self.feedback_comment.strip())
+        if not (has_rating or has_learned or has_comment):
+            raise ValueError("At least one feedback field is required")
+        return self
 
 
 class CoachingErrorResponse(BaseModel):
@@ -96,7 +118,23 @@ def _session_to_dict(row: dict) -> dict:
         "main_problem": row.get("main_problem"),
         "new_trades_count": row.get("new_trades_count"),
         "model_used": row.get("model_used"),
+        "feedback_rating": row.get("feedback_rating"),
+        "feedback_comment": row.get("feedback_comment"),
+        "feedback_learned_new": row.get("feedback_learned_new"),
+        "feedback_submitted_at": row.get("feedback_submitted_at"),
     }
+
+
+def _fetch_session_row(client: Any, session_id: str) -> dict | None:
+    result = (
+        client.table("coaching_sessions")
+        .select("*")
+        .eq("id", session_id)
+        .execute()
+    )
+    if not result.data:
+        return None
+    return result.data[0]
 
 
 # ---------------------------------------------------------------------------
@@ -146,19 +184,60 @@ async def request_coaching(user_id: str, body: CoachingRequest, auth_user: str =
 def get_coaching_session(session_id: str, auth_user: str = Depends(get_current_user)):
     """Get a single coaching session by ID."""
     client = get_client()
+    session = _fetch_session_row(client, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    require_self(auth_user, session["user_id"])
+    return CoachingSessionOut(**_session_to_dict(session))
+
+
+# ---------------------------------------------------------------------------
+# POST /api/coaching/session/{session_id}/feedback
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/session/{session_id}/feedback",
+    response_model=CoachingSessionOut,
+)
+def submit_coaching_feedback(
+    session_id: str,
+    body: CoachingFeedbackRequest,
+    auth_user: str = Depends(get_current_user),
+):
+    """Submit one-time feedback for a coaching session."""
+    client = get_client()
+    session = _fetch_session_row(client, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    require_self(auth_user, session["user_id"])
+
+    if session.get("feedback_submitted_at"):
+        raise HTTPException(status_code=409, detail="Feedback already submitted")
+
+    submitted_at = datetime.now(timezone.utc).isoformat()
+    update: dict[str, Any] = {"feedback_submitted_at": submitted_at}
+
+    if body.feedback_rating is not None:
+        update["feedback_rating"] = body.feedback_rating
+    if body.feedback_learned_new is not None:
+        update["feedback_learned_new"] = body.feedback_learned_new
+    if body.feedback_comment is not None:
+        comment = body.feedback_comment.strip()
+        if comment:
+            update["feedback_comment"] = comment
+
     result = (
         client.table("coaching_sessions")
-        .select("*")
+        .update(update)
         .eq("id", session_id)
         .execute()
     )
     if not result.data:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=500, detail="Failed to save feedback")
 
-    session = result.data[0]
-    require_self(auth_user, session["user_id"])
-    return CoachingSessionOut(**_session_to_dict(session))
+    return CoachingSessionOut(**_session_to_dict(result.data[0]))
 
 
 # ---------------------------------------------------------------------------

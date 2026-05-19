@@ -712,6 +712,144 @@ class TestCoachingAPI:
         assert "Unable to generate coaching" in resp.json()["error"]
 
 
+def _session_row(**overrides):
+    row = {
+        "id": "sess-feedback-1",
+        "user_id": "test-user-1",
+        "account_id": "acc-1",
+        "created_at": "2025-01-20T12:00:00+00:00",
+        "ai_response": "Analysis text",
+        "metrics_snapshot": None,
+        "rules": None,
+        "recommendations": None,
+        "verdict": None,
+        "main_problem": None,
+        "new_trades_count": 10,
+        "model_used": "claude-sonnet-4-20250514",
+        "feedback_rating": None,
+        "feedback_comment": None,
+        "feedback_learned_new": None,
+        "feedback_submitted_at": None,
+    }
+    row.update(overrides)
+    return row
+
+
+def _mock_coaching_table(select_row: dict | None, update_row: dict | None = None):
+    mock_client = MagicMock()
+    mock_table = MagicMock()
+    mock_client.table.return_value = mock_table
+
+    select_chain = MagicMock()
+    select_chain.execute.return_value = MagicMock(
+        data=[select_row] if select_row else []
+    )
+    mock_table.select.return_value.eq.return_value = select_chain
+
+    if update_row is not None:
+        update_chain = MagicMock()
+        update_chain.execute.return_value = MagicMock(data=[update_row])
+        mock_table.update.return_value.eq.return_value = update_chain
+
+    return mock_client
+
+
+class TestCoachingFeedbackAPI:
+    @pytest.mark.asyncio
+    async def test_submit_feedback_success(self):
+        from httpx import ASGITransport, AsyncClient
+
+        from tradecoach.main import app
+
+        row = _session_row()
+        updated = _session_row(
+            feedback_rating=4,
+            feedback_learned_new=True,
+            feedback_comment="Helpful",
+            feedback_submitted_at="2025-01-20T13:00:00+00:00",
+        )
+        mock_client = _mock_coaching_table(row, updated)
+
+        with patch("tradecoach.api.coaching.get_client", return_value=mock_client):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                resp = await ac.post(
+                    "/api/coaching/session/sess-feedback-1/feedback",
+                    json={
+                        "feedback_rating": 4,
+                        "feedback_learned_new": True,
+                        "feedback_comment": "Helpful",
+                    },
+                )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["feedback_rating"] == 4
+        assert data["feedback_learned_new"] is True
+        assert data["feedback_comment"] == "Helpful"
+        assert data["feedback_submitted_at"] is not None
+        mock_client.table.return_value.update.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_submit_feedback_idempotent_rejection(self):
+        from httpx import ASGITransport, AsyncClient
+
+        from tradecoach.main import app
+
+        row = _session_row(feedback_submitted_at="2025-01-20T12:30:00+00:00")
+        mock_client = _mock_coaching_table(row)
+
+        with patch("tradecoach.api.coaching.get_client", return_value=mock_client):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                resp = await ac.post(
+                    "/api/coaching/session/sess-feedback-1/feedback",
+                    json={"feedback_rating": 5},
+                )
+
+        assert resp.status_code == 409
+        assert "already submitted" in resp.json()["detail"].lower()
+        mock_client.table.return_value.update.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_submit_feedback_requires_at_least_one_field(self):
+        from httpx import ASGITransport, AsyncClient
+
+        from tradecoach.main import app
+
+        row = _session_row()
+        mock_client = _mock_coaching_table(row)
+
+        with patch("tradecoach.api.coaching.get_client", return_value=mock_client):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                resp = await ac.post(
+                    "/api/coaching/session/sess-feedback-1/feedback",
+                    json={},
+                )
+
+        assert resp.status_code == 422
+        mock_client.table.return_value.update.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_submit_feedback_session_not_found(self):
+        from httpx import ASGITransport, AsyncClient
+
+        from tradecoach.main import app
+
+        mock_client = _mock_coaching_table(None)
+
+        with patch("tradecoach.api.coaching.get_client", return_value=mock_client):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                resp = await ac.post(
+                    "/api/coaching/session/missing/feedback",
+                    json={"feedback_rating": 3},
+                )
+
+        assert resp.status_code == 404
+
+
 # ===================================================================
 # Legacy compatibility
 # ===================================================================

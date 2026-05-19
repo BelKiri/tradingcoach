@@ -258,6 +258,18 @@ export interface CoachingSession {
   main_problem: string | null;
   new_trades_count: number | null;
   model_used: string | null;
+  feedback_rating: number | null;
+  feedback_comment: string | null;
+  feedback_learned_new: boolean | null;
+  feedback_submitted_at: string | null;
+}
+
+export const FEEDBACK_COMMENT_MAX_LEN = 2000;
+
+export interface CoachingFeedbackPayload {
+  feedback_rating?: number;
+  feedback_learned_new?: boolean;
+  feedback_comment?: string;
 }
 
 export async function requestCoaching(
@@ -275,6 +287,20 @@ export async function getCoachingSession(
   sessionId: string,
 ): Promise<CoachingSession> {
   return apiFetch<CoachingSession>(`/api/coaching/session/${sessionId}`);
+}
+
+export async function submitCoachingFeedback(
+  sessionId: string,
+  payload: CoachingFeedbackPayload,
+): Promise<CoachingSession> {
+  return apiFetch<CoachingSession>(
+    `/api/coaching/session/${sessionId}/feedback`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export async function getCoachingSessions(
