@@ -193,8 +193,6 @@ export default function CoachingSessionPage() {
         </CardContent>
       </Card>
 
-      <CoachingSessionFeedback sessionId={sessionId} session={session} />
-
       {/* Action plan (structured rules) */}
       {session.rules && session.rules.length > 0 && (
         <Card>
@@ -235,6 +233,8 @@ export default function CoachingSessionPage() {
           </CardContent>
         </Card>
       )}
+
+      <CoachingSessionFeedback sessionId={sessionId} session={session} />
 
       <p className="text-center text-xs text-muted-foreground">
         {session.model_used

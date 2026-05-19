@@ -79,7 +79,7 @@ function ThanksView({ values }: { values: FeedbackValues }) {
           value={formatRating(values.feedback_rating)}
         />
         <FeedbackRow
-          label="Did you learn something new about your trading?"
+          label="Did you learn something new about your trading behavior?"
           value={formatLearned(values.feedback_learned_new)}
         />
         <div>
@@ -230,7 +230,7 @@ export function CoachingSessionFeedback({
 
         <div className="space-y-2">
           <p className="text-sm font-medium">
-            Did you learn something new about your trading?
+            Did you learn something new about your trading behavior?
           </p>
           <div className="flex gap-2">
             <Button
