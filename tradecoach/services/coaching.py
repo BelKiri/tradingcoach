@@ -493,10 +493,22 @@ Each rule object MUST address a DIFFERENT aspect of the trader's behavior or str
 - Frequency / trade count
 - Risk management (stop-loss usage, position sizing)
 
-Selection method: For each candidate aspect supported by the data, estimate the monthly dollar impact if the corresponding rule is followed. Then select the 3 aspects with the highest projected impact — not three random aspects, not three variants of the same topic. The savings_estimate_usd field below is where you record that estimate; use it as your ranking criterion.
+Selection method (read this carefully — the Action Plan is generated INDEPENDENTLY of the Main Problems section above):
+
+The 3 rules in the Action Plan are NOT obliged to map onto the 3 problems from Main Problems. Rules may overlap with problems, or address entirely different aspects, depending on where the data shows the highest projected dollar impact.
+
+For each candidate aspect supported by the data — whether it represents an avoided loss (e.g., stop trading an instrument that loses money) or a captured gain (e.g., concentrate trades during a regime where the trader makes money) — estimate the monthly dollar impact if the corresponding rule is followed.
+
+Then select the 3 aspects with the highest projected dollar impact. Do NOT default to selecting only negative aspects. If a positive aspect (e.g., a high-performing volatility regime, session, or instrument) shows higher projected impact than a negative aspect, include the positive one and drop the lower-impact negative one.
+
+The savings_estimate_usd field below is where you record that estimate; use it as your ranking criterion. Mixing negative-constraint and positive-constraint rules in the same Action Plan is expected and encouraged when the data supports it.
+
+Rule wording style:
+- For negative constraints (avoiding loss-generating behavior), use direct imperatives: "Stop trading X", "Avoid Y session", "Never add to losing positions", "Maximum N trades per day".
+- For positive constraints (capturing gain-generating behavior), use recommendation form, not imperative: "Consider concentrating trades during X", "Explore trading more in Y regime". Do NOT command "trade only on X" or "trade exclusively during Y" — historical correlation does not guarantee future causation, and the recommendation form respects that uncertainty.
 
 Each rule object:
-- "action": short imperative, 5-12 words
+- "action": short imperative (for negative constraints) or recommendation (for positive constraints), 5-12 words
 - "rationale": 1-2 sentences with specific numbers from the data, using the +$NNN / -$NNN format
 - "savings_estimate_usd": integer, projected monthly savings in dollars if this rule is followed (0 if not estimable). Used internally to rank the rules — the 3 rules you return must be the 3 with highest projected impact.
 
@@ -504,8 +516,8 @@ Example structure (illustrative — derive your own actions and rationales from 
 
 <rules>
 [
-  {"action": "Do not trade on high-volatility days", "rationale": "Your 22 high-volatility trades returned -$1,375 vs +$340 on normal days.", "savings_estimate_usd": 400},
-  {"action": "Stop trading GBPUSD", "rationale": "GBPUSD returned -$890 over 18 trades with 28% win rate.", "savings_estimate_usd": 300},
+  {"action": "Stop trading GBPUSD", "rationale": "GBPUSD returned -$890 over 18 trades with 28% win rate.", "savings_estimate_usd": 400},
+  {"action": "Consider concentrating trades during high-volatility regimes", "rationale": "Your 22 high-volatility trades returned +$1,375 vs -$340 on normal-volatility days; the regime gap is +$1,715.", "savings_estimate_usd": 350},
   {"action": "Maximum 3 trades per day", "rationale": "On days with 5+ trades you returned -$1,200; on days with 3 or fewer you returned +$450.", "savings_estimate_usd": 250}
 ]
 </rules>
