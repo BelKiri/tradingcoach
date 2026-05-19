@@ -716,6 +716,7 @@ async def get_ai_coaching(
         input_tokens=usage.input_tokens,
         output_tokens=usage.output_tokens,
         cost_usd=usage.cost_usd,
+        llm_latency_ms=usage.latency_ms,
     )
 
     if not increment_coaching_sessions_used(client, user_id):
@@ -780,6 +781,7 @@ def _save_coaching_session(
     input_tokens: int,
     output_tokens: int,
     cost_usd: float,
+    llm_latency_ms: float,
 ) -> str:
     """Insert a coaching session row. Returns the session ID."""
     row = {
@@ -799,6 +801,7 @@ def _save_coaching_session(
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "cost_usd": cost_usd,
+        "llm_latency_ms": int(round(llm_latency_ms)),
     }
     result = client.table("coaching_sessions").insert(row).execute()
     return result.data[0]["id"]

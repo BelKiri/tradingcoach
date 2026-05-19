@@ -28,6 +28,7 @@ from tradecoach.services.coaching import (
     _parse_main_problem,
     _parse_rules,
     _parse_verdict,
+    _save_coaching_session,
     _strip_rules_block,
     build_full_coaching_prompt,
     generate_ai_coaching,
@@ -499,6 +500,44 @@ class TestParsers:
 
 
 # ===================================================================
+# _save_coaching_session
+# ===================================================================
+
+
+class TestSaveCoachingSession:
+    def test_writes_llm_latency_ms_on_insert(self):
+        mock_client = MagicMock()
+        insert_chain = MagicMock()
+        insert_chain.execute.return_value = MagicMock(data=[{"id": "sess-latency-1"}])
+        mock_client.table.return_value.insert.return_value = insert_chain
+
+        session_id = _save_coaching_session(
+            mock_client,
+            user_id="user-1",
+            account_id="account-1",
+            period_from=None,
+            period_to=None,
+            metrics_snapshot={"trades_count": 5},
+            rag_context={"statistics": True},
+            recommendations=None,
+            rules=None,
+            ai_response="Analysis",
+            verdict=None,
+            main_problem=None,
+            new_trades_count=5,
+            model_used="claude-sonnet-4-6",
+            input_tokens=100,
+            output_tokens=50,
+            cost_usd=0.01,
+            llm_latency_ms=3456.7,
+        )
+
+        assert session_id == "sess-latency-1"
+        row = mock_client.table.return_value.insert.call_args[0][0]
+        assert row["llm_latency_ms"] == 3457
+
+
+# ===================================================================
 # get_ai_coaching (mocked DB + LLM)
 # ===================================================================
 
@@ -553,6 +592,7 @@ class TestGetAiCoaching:
         assert save_kwargs["input_tokens"] == 1000
         assert save_kwargs["output_tokens"] == 500
         assert save_kwargs["cost_usd"] == 0.0105
+        assert save_kwargs["llm_latency_ms"] == 3000
 
     @pytest.mark.asyncio
     async def test_repeat_session(self):
