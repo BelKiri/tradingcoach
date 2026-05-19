@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Persistent banner showing remaining AI Coach sessions across the app.
+- AI Coach session feedback: users can rate the analysis, indicate whether they learned something new about their trading behavior, and leave a comment.
 
 ### Planned
 - Cleanup of legacy LLM integration code
