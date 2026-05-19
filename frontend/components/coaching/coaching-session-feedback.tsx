@@ -270,7 +270,7 @@ export function CoachingSessionFeedback({
             disabled={locked}
             rows={4}
             maxLength={FEEDBACK_COMMENT_MAX_LEN}
-            placeholder="What worked, what didn\u2019t, anything we should know\u2026"
+            placeholder="What worked, what didn’t, anything we should know…"
             className={cn(
               "flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm",
               "ring-offset-background placeholder:text-muted-foreground",
