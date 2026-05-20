@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CSV files exported directly from the trading terminal now import correctly with timestamps preserved. Previously, CSVs with the raw broker-export column layout could result in trades that appeared in instrument totals but did not aggregate by day, hour, or trading session.
 
 ### Changed
+- Upload endpoint rejects files larger than 10 MB to prevent backend memory pressure.
 - coaching: redesigned first-session AI analysis with three-section narrative and independently-ranked action plan
 - AI coaching now analyzes the full account history and flags trades near high-impact macroeconomic events.
 - Landing page: removed pricing section and crypto trading FAQ; updated AI coaching FAQ wording to match current product capability.
