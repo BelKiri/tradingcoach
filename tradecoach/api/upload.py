@@ -11,6 +11,10 @@ from pydantic import BaseModel
 
 from tradecoach.api.auth import get_current_user, require_self
 
+MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024
+_UPLOAD_CHUNK_SIZE_BYTES = 64 * 1024
+UPLOAD_TOO_LARGE_DETAIL = "File too large. Maximum 10 MB."
+
 from tradecoach.db.models import TradeCreate
 from tradecoach.db.queries import (
     find_existing_trade_keys,
@@ -65,6 +69,24 @@ def _parsed_row_times_to_utc(row: dict, broker_tz: str) -> dict:
     return out
 
 
+def _read_upload_bounded(file: UploadFile) -> bytes:
+    """Read upload body in chunks; reject before exceeding MAX_UPLOAD_SIZE_BYTES."""
+    if file.size is not None and file.size > MAX_UPLOAD_SIZE_BYTES:
+        raise HTTPException(status_code=413, detail=UPLOAD_TOO_LARGE_DETAIL)
+
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = file.file.read(_UPLOAD_CHUNK_SIZE_BYTES)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > MAX_UPLOAD_SIZE_BYTES:
+            raise HTTPException(status_code=413, detail=UPLOAD_TOO_LARGE_DETAIL)
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 @router.post("/{user_id}", response_model=UploadResponse)
 def upload_file(
     user_id: str,
@@ -78,7 +100,7 @@ def upload_file(
         raise HTTPException(400, "No file provided")
 
     fname = file.filename.lower()
-    content = file.file.read()
+    content = _read_upload_bounded(file)
     if not content:
         raise HTTPException(400, "Empty file")
 

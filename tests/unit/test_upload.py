@@ -1,12 +1,16 @@
-"""Upload deduplication — trade_dedup_key format alignment."""
+"""Upload deduplication and upload endpoint size limits."""
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from unittest.mock import patch
 
 import pytest
+from httpx import ASGITransport, AsyncClient
 
+from tradecoach.api.upload import MAX_UPLOAD_SIZE_BYTES, UPLOAD_TOO_LARGE_DETAIL
 from tradecoach.db.queries import trade_dedup_key
+from tradecoach.main import app
 
 UTC = timezone.utc
 
@@ -93,3 +97,49 @@ def test_trade_dedup_key_incoming_matches_existing_set(
     """Incoming key is recognized as duplicate when existing set uses DB rows."""
     existing = {trade_dedup_key(same_trade_db_row)}
     assert trade_dedup_key(same_trade_incoming_row) in existing
+
+
+@pytest.mark.asyncio
+async def test_upload_rejects_oversized_file_with_413() -> None:
+    oversized = b"x" * (MAX_UPLOAD_SIZE_BYTES + 1)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.post(
+            "/api/upload/test-user-1",
+            data={"account_id": ""},
+            files={"file": ("trades.csv", oversized, "text/csv")},
+        )
+
+    assert resp.status_code == 413
+    assert resp.json()["detail"] == UPLOAD_TOO_LARGE_DETAIL
+
+
+@pytest.mark.asyncio
+async def test_upload_happy_path_small_csv_returns_200() -> None:
+    sample_trade = {
+        "symbol": "EURUSD",
+        "direction": "buy",
+        "lot": 0.1,
+        "opened_at": "2024-01-01T10:00:00",
+        "closed_at": "2024-01-01T11:00:00",
+    }
+    with (
+        patch("tradecoach.api.upload.get_client"),
+        patch("tradecoach.api.upload.assert_can_upload_file"),
+        patch("tradecoach.api.upload.parse_mt4_csv", return_value=[sample_trade]),
+        patch("tradecoach.api.upload.find_existing_trade_keys", return_value=set()),
+        patch("tradecoach.api.upload.insert_trades", return_value=[]),
+    ):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            resp = await ac.post(
+                "/api/upload/test-user-1",
+                data={"account_id": ""},
+                files={"file": ("trades.csv", b"ticket,symbol\n", "text/csv")},
+            )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["trades_parsed"] == 1
+    assert body["trades_new"] == 1
+    assert body["trades_saved"] == 0
