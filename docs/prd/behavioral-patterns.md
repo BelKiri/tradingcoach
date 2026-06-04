@@ -35,7 +35,7 @@ Internal user research conducted at a previous fintech role identified this miss
 
 ## 3. Target Personas & Use Cases
 
-**Primary segment:** Newbie-amateur retail trader, 0–2 years of active trading experience, account size typically $500–10K. Has just uploaded a journal export and is looking at the dashboard for the first time. May or may not pay for coaching; behavioral patterns are visible regardless.
+**Primary segment:** Newbie-amateur retail trader, 0–2 years of active trading experience, account size typically $500–50K. Has just uploaded a journal export and is looking at the dashboard for the first time. May or may not pay for coaching; behavioral patterns are visible regardless.
 
 **Top use cases:**
 
@@ -91,3 +91,4 @@ The dashboard renders the result as a compact behavioral analysis section alongs
 - User-defined custom patterns. The set of detected patterns is fixed in v1.
 - Predictive scoring or "risk of next trade" estimates. Patterns describe what already happened; they do not forecast.
 - AI or LLM involvement in detection. The deterministic nature of this layer is its architectural value — it is what gives any downstream narrative its grounding. Introducing an LLM into detection would defeat the point.
+
