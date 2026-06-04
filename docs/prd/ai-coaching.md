@@ -1,4 +1,4 @@
-# AI Coaching — Lean PRD
+# AI Coaching PRD (MVP)
 
 ## 0. TL;DR
 
@@ -96,7 +96,6 @@ An LLM receives this pre-computed structured context, not raw trades, and produc
 
 - Comparison against the previous coaching session for the same account.
 - **Pattern detection, dollar-impact computation, and dashboard display of behavioral signals.** All of that is the Behavioral Patterns layer's responsibility. AI Coaching consumes those signals; it does not produce them. See the Behavioral Patterns PRD for the split.
-
 - **Real-time, intra-trade coaching alerts.** The coaching loop in v1 is post-trade, after the journal is uploaded — not pre-trade. Pre-trade coaching changes the regulatory and product surface materially and belongs to its own scope.
 - **Auto-import directly from broker APIs (MetaTrader, exchanges).** v1 relies on user-uploaded journal exports; auto-import is in the post-launch roadmap.
 - **Multi-account portfolio coaching.** v1 coaches one account at a time. Cross-account aggregation introduces identity and netting questions that are not solved here.
