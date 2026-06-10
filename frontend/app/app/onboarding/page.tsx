@@ -2,7 +2,6 @@
 
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -84,7 +83,7 @@ export default function OnboardingPage() {
       <div className="text-center">
         <h1 className="text-2xl font-bold">Add trading account</h1>
         <p className="mt-2 text-muted-foreground">
-          Set up your account, then upload trades or connect an exchange.
+          Set up your account, then upload your trade history.
         </p>
       </div>
 
@@ -154,70 +153,48 @@ export default function OnboardingPage() {
         Upload trade history (optional)
       </h2>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div
-          className={`cursor-pointer rounded-lg border-2 border-dashed p-6 transition-colors ${
-            dragOver
-              ? "border-primary bg-primary/5"
-              : file
-              ? "border-emerald-500/50 bg-emerald-500/5"
-              : "hover:border-muted-foreground/50"
-          }`}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={handleDrop}
-          onClick={() => document.getElementById("file-input")?.click()}
-        >
-          <input
-            id="file-input"
-            type="file"
-            accept=".csv,.txt,.xlsx,.xls"
-            className="hidden"
-            onChange={handleFileSelect}
-          />
-          <div className="flex h-32 flex-col items-center justify-center text-center">
-            {file ? (
-              <>
-                <p className="text-2xl text-emerald-400">{"\u2713"}</p>
-                <p className="mt-2 text-sm font-medium">{file.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {(file.size / 1024).toFixed(1)} KB
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-2xl text-muted-foreground">+</p>
-                <p className="mt-1 text-sm font-medium">Drop file here</p>
-                <p className="text-xs text-muted-foreground">
-                  CSV or Excel from any broker
-                </p>
-              </>
-            )}
-          </div>
-        </div>
-
-        <Link href="/app/connect" onClick={() => setBrokerTz("UTC+0")}>
-          <Card className="h-full cursor-pointer transition-colors hover:border-primary/50">
-            <CardHeader>
-              <CardTitle className="text-base">Connect API</CardTitle>
-              <CardDescription>
-                Auto-sync trades from your exchange
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex h-32 flex-col items-center justify-center text-muted-foreground">
-                <p className="text-2xl">{"\u26a1"}</p>
-                <p className="mt-1 text-sm">Connect exchange</p>
-              </div>
+      <div
+        className={`cursor-pointer rounded-lg border-2 border-dashed p-6 transition-colors ${
+          dragOver
+            ? "border-primary bg-primary/5"
+            : file
+            ? "border-emerald-500/50 bg-emerald-500/5"
+            : "hover:border-muted-foreground/50"
+        }`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+        onClick={() => document.getElementById("file-input")?.click()}
+      >
+        <input
+          id="file-input"
+          type="file"
+          accept=".csv,.txt,.xlsx,.xls"
+          className="hidden"
+          onChange={handleFileSelect}
+        />
+        <div className="flex h-32 flex-col items-center justify-center text-center">
+          {file ? (
+            <>
+              <p className="text-2xl text-emerald-400">{"\u2713"}</p>
+              <p className="mt-2 text-sm font-medium">{file.name}</p>
               <p className="text-xs text-muted-foreground">
-                Binance, Bybit, OKX &mdash; coming soon
+                {(file.size / 1024).toFixed(1)} KB
               </p>
-            </CardContent>
-          </Card>
-        </Link>
+            </>
+          ) : (
+            <>
+              <p className="text-2xl text-muted-foreground">+</p>
+              <p className="mt-1 text-sm font-medium">Drop file here</p>
+              <p className="text-xs text-muted-foreground">
+                CSV or Excel from any broker
+              </p>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="mt-8 flex justify-end">
